@@ -1,0 +1,20 @@
+# --- UI & Visuals ---
+customtkinter
+matplotlib
+
+# --- Data & Machine Learning ---
+pandas
+scikit-learn
+
+# --- OS Integration (Notifications) ---
+plyer
+
+# --- Window Tracking ---
+# NOTE FOR TEAM: Only install the one for your operating system!
+# Windows users uncomment the next line:
+# pygetwindow
+
+# Mac users uncomment the next line:
+# pyobjc-framework-AppKit
+
+# SQL is built directly into python

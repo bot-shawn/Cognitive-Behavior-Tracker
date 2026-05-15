@@ -1,6 +1,6 @@
 # Cognitive-Behavior-Tracker
 
-quick notes
+### quick notes (delete after project complete)
 You would need a vitural environment to work on this because we have many packages that we need to use.
 to create a virtual environment (Do this only the first time)
 python3 -m venv venv   # (Mac)
@@ -12,6 +12,13 @@ venv\Scripts\activate      # (Windows)
 
 run pip install -r requirements.txt
 to install all the needed package to the virtual environment, only need to do once.
+
+### Mac User Troubleshooting (Tkinter Error)
+If you are using a Mac and installed Python via Homebrew, you might get a `ModuleNotFoundError: No module named '_tkinter'` error when running the UI. 
+
+This is because Homebrew does not install the Python graphics engine by default. To fix this, leave your virtual environment running and execute:
+`brew install python-tk@3.13`
+
 
 ## Overview
 In an environment of constant digital distractions, individuals struggle to allocate their attention effectively. While existing tools provide descriptive weekly analytics, they fail to explain *why* attention breaks down in the moment.

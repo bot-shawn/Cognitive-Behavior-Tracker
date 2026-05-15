@@ -15,6 +15,6 @@ plyer
 # pygetwindow
 
 # Mac users uncomment the next line:
-# pyobjc-framework-AppKit
+pyobjc-framework-AppKit
 
 # SQL is built directly into python

@@ -1,78 +1,97 @@
 import subprocess
 import time
 import sqlite3
-from datetime import datetime
 import os
+from datetime import datetime
 
-# --- 1. Database Setup ---
-# This ensures the database is saved in the 'database' folder we created
+# --- 1. File Paths ---
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, 'database', 'focus_data.db')
 
-def setup_database():
+# --- 2. Dictionaries ---
+WORK_APPS = ["Code", "Google Chrome", "Safari", "Preview", "Pages", "Word"]
+SOCIAL_APPS = ["Discord", "Messages", "Mail", "Slack", "Spotify"]
+
+# --- 3. Database Auto-Builder ---
+def init_db():
     conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
+    c = conn.cursor()
+    # Notice the brand new window_title column!
+    c.execute('''
         CREATE TABLE IF NOT EXISTS app_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp DATETIME,
-            app_name TEXT,
-            category TEXT
+            timestamp TEXT NOT NULL,
+            app_name TEXT NOT NULL,
+            window_title TEXT NOT NULL,
+            category TEXT NOT NULL
         )
     ''')
     conn.commit()
-    return conn
+    conn.close()
 
-# --- 2. The Mac Dictionary ---
-def categorize_app(app_name):
-    # Categorizes the app so the logic knows if it is Deep Work or a Distraction
-    work_apps = ["Code", "Code - Insiders", "Terminal", "Google Chrome", "Safari", "Preview", "Pages", "Word"]
-    social_apps = ["Discord", "Messages", "Mail", "Slack", "Spotify"]
-    
-    if app_name in work_apps:
-        return "Work"
-    elif app_name in social_apps:
-        return "Distraction"
-    else:
-        return "Neutral"
-
-# --- 3. The Mac Window Tracker (AppleScript) ---
-def get_active_mac_window():
-    # Asks the Mac what app is in front without needing massive security permissions
-    script = 'tell application "System Events" to get name of first application process whose frontmost is true'
+# --- 4. The macOS Bridge ---
+def get_active_window_mac():
+    """Uses AppleScript to grab the App Name AND the Tab/Document Title"""
+    script = """
+    global frontApp, windowTitle
+    set windowTitle to ""
+    tell application "System Events"
+        set frontApp to name of first application process whose frontmost is true
+        try
+            tell process frontApp
+                set windowTitle to name of front window
+            end tell
+        end try
+    end tell
+    return frontApp & "::" & windowTitle
+    """
     try:
-        result = subprocess.check_output(['osascript', '-e', script])
-        return result.decode('utf-8').strip()
+        result = subprocess.check_output(['osascript', '-e', script]).decode('utf-8').strip()
+        if "::" in result:
+            app_name, window_title = result.split("::", 1)
+            return app_name.strip(), window_title.strip()
+        return result, ""
     except Exception:
-        return "Unknown"
+        return "Unknown", "Unknown"
 
-# --- 4. The Main Loop ---
-def start_tracking():
-    print("🚀 Starting Study Session Tracker...")
-    print("Press Ctrl+C in this terminal to stop.\n")
+# --- 5. The Tracking Engine ---
+def start_tracker():
+    print("🚀 Starting Context-Aware Tracker...")
+    print("Press Ctrl+C in this terminal to stop.")
+    init_db() 
     
-    conn = setup_database()
-    cursor = conn.cursor()
-    
+    # We bring the NLP dictionary into the tracker too!
+    DISTRACTION_SITES = ["reddit", "twitter", "x", "tiktok", "instagram", "facebook", "youtube", "netflix"]
+
     try:
         while True:
-            current_app = get_active_mac_window()
-            category = categorize_app(current_app)
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            app_name, window_title = get_active_window_mac()
             
-            # Print to the terminal so we can see it working
-            print(f"[{current_time}] Active App: {current_app} ({category})")
+            # --- THE NEW SMART CATEGORY LOGIC ---
+            if app_name in WORK_APPS: 
+                category = "Work"
+                # Double check if they are goofing off in a Work App
+                if any(site in window_title.lower() for site in DISTRACTION_SITES):
+                    category = "Distraction"
+                    
+            elif app_name in SOCIAL_APPS: 
+                category = "Distraction"
+            else: 
+                category = "Neutral"
+                
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-            # Save it to the SQLite database
-            cursor.execute("INSERT INTO app_logs (timestamp, app_name, category) VALUES (?, ?, ?)", 
-                           (current_time, current_app, category))
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute("INSERT INTO app_logs (timestamp, app_name, window_title, category) VALUES (?, ?, ?, ?)",
+                      (timestamp, app_name, window_title, category))
             conn.commit()
+            conn.close()
             
-            time.sleep(5) # Wait 5 seconds before checking again
-            
+            print(f"[{timestamp}] {app_name} | {window_title[:40]} -> {category}")
+            time.sleep(5)
     except KeyboardInterrupt:
         print("\nTracker stopped cleanly.")
-        conn.close()
-
+        
 if __name__ == "__main__":
-    start_tracking()
+    start_tracker()

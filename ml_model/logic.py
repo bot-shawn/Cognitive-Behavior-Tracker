@@ -9,37 +9,37 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, 'database', 'focus_data.db')
 CSV_PATH = os.path.join(BASE_DIR, 'ml_model', 'synthetic_focus_data.csv')
 
+# --- THE COGNITIVE NLP DICTIONARIES ---
+SCROLL_SITES = ["reddit", "twitter", "x", "tiktok", "instagram", "facebook", "youtube", "shorts"]
+DEEP_WORK_SITES = ["docs.google", "github", "stackoverflow", "canvas", "ucsd", "localhost"]
+
 def train_brain():
-    print("📚 Training the Ultimate Cognitive Model...")
+    print("📚 Training Cognitive NLP Model...")
     df = pd.read_csv(CSV_PATH)
     
-    # 1. Convert text to numbers
     df['category_num'] = df['category'].map({'Work': 0, 'Distraction': 1, 'Neutral': 0})
-    
-    # 2. Extract the Hour
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     df['hour'] = df['timestamp'].dt.hour
+    df['time_spent_seconds'] = df['timestamp'].diff().dt.total_seconds().fillna(0)
     
-    # 3. Calculate "Time Spent" (Lag Feature)
-    # This subtracts the previous row's time from the current row's time
-    df['time_spent_seconds'] = df['timestamp'].diff().dt.total_seconds()
-    # The very first row won't have a previous row to subtract, so we fill the blank with 0
-    df['time_spent_seconds'] = df['time_spent_seconds'].fillna(0)
+    # Simulate NLP features for the synthetic data so the AI learns to weigh them heavily
+    df['is_scrolling'] = df['category'].apply(lambda x: 1 if x == 'Distraction' else 0)
+    df['is_deep_work'] = df['category'].apply(lambda x: 1 if x == 'Work' else 0)
     
-    # The AI now uses THREE clues to diagnose overload
-    X = df[['category_num', 'hour', 'time_spent_seconds']]
+    # The AI now uses 5 distinct clues to make a decision
+    X = df[['category_num', 'hour', 'time_spent_seconds', 'is_scrolling', 'is_deep_work']]
     y = df['is_overloaded']
     
     model = DecisionTreeClassifier()
     model.fit(X, y)
-    print("✅ AI Model trained on Category, Time of Day, and Duration!")
+    print("AI Model trained with Deep Work & Scroll Detection!")
     return model
 
-def send_nudge():
-    print("🚨 Thrashing Detected! Sending OS Nudge...")
+def send_nudge(reason="Rapid context switching detected."):
+    print(f"Overload Detected: {reason}")
     notification.notify(
         title="Cognitive Overload Detected 🧠",
-        message="Rapid context switching detected. Take a deep breath.",
+        message=f"{reason} Take a deep breath.",
         app_name="Study Assistant",
         timeout=5
     )
@@ -47,51 +47,52 @@ def send_nudge():
 def run_live_analysis(model):
     print("🧠 Monitoring live brain activity...")
     last_nudge_time = 0
-    
-    # --- NEW: Memory for the true duration ---
     previous_app = None
     app_start_time = time.time()
     
     while True:
         try:
             conn = sqlite3.connect(DB_PATH)
-            # We only need the very newest row now
             df_live = pd.read_sql_query("SELECT * FROM app_logs ORDER BY id DESC LIMIT 1", conn)
             conn.close()
             
             if not df_live.empty:
                 current_app = df_live['app_name'].iloc[0]
+                # Safely grab the window title (fallback to empty string if missing)
+                window_title = df_live.get('window_title', pd.Series([''])).iloc[0].lower()
                 category = df_live['category'].iloc[0]
                 
-                # If the user switched apps, hit reset on the stopwatch!
                 if current_app != previous_app:
                     app_start_time = time.time()
                     previous_app = current_app
                     
-                # Calculate true time spent continuously on THIS app
                 time_spent_seconds = time.time() - app_start_time
                 
-                # Format for the AI Brain
+                # --- Natural Language Processing (NLP) Checks ---
+                is_scrolling = 1 if any(site in window_title for site in SCROLL_SITES) else 0
+                is_deep_work = 1 if any(site in window_title for site in DEEP_WORK_SITES) else 0
+                
                 category_num = 0 if category == 'Work' else (1 if category == 'Distraction' else 0)
                 hour = pd.to_datetime(df_live['timestamp'].iloc[0]).hour
                 
-                # Ask the AI (using a proper DataFrame to avoid warnings)
-                df_predict = pd.DataFrame([[category_num, hour, time_spent_seconds]], 
-                                          columns=['category_num', 'hour', 'time_spent_seconds'])
-                prediction = model.predict(df_predict)[0]
+                # Format exactly to match the 5 clues the AI was trained on
+                df_predict = pd.DataFrame([[category_num, hour, time_spent_seconds, is_scrolling, is_deep_work]], 
+                                          columns=['category_num', 'hour', 'time_spent_seconds', 'is_scrolling', 'is_deep_work'])
                 
+                prediction = model.predict(df_predict)[0]
                 current_time = time.time()
                 
                 if prediction == 1 and (current_time - last_nudge_time > 60):
-                    send_nudge()
+                    # Dynamic intervention message based on exact behavior
+                    reason = "Infinite scroll loop detected." if is_scrolling else "Rapid context switching detected."
+                    send_nudge(reason)
                     last_nudge_time = current_time
                     
         except Exception:
             pass 
         
-        time.sleep(5)
+        time.sleep(5) 
 
-        
 if __name__ == "__main__":
     trained_model = train_brain()
     run_live_analysis(trained_model)

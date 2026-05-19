@@ -23,7 +23,7 @@ This is because Homebrew does not install the Python graphics engine by default.
 ## Overview
 In an environment of constant digital distractions, individuals struggle to allocate their attention effectively. While existing tools provide descriptive weekly analytics, they fail to explain *why* attention breaks down in the moment.
 
-This project is a 100% local, privacy-first behavioral analytics desktop application. Grounded in cognitive science principles, this platform acts as an active **Study Session Assistant** to diagnose and prevent mental fatigue in real-time.
+This project is a 100% local behavioral analytics desktop application. This platform acts as an active **Study Session Assistant** to diagnose and prevent mental fatigue in real-time.
 
 ### Core Features
 * **Session-Based Tracking:** Users initiate focused study blocks (e.g., 2 hours). The app tracks attention patterns and categorizes application usage only during these active sessions.
@@ -33,7 +33,7 @@ This project is a 100% local, privacy-first behavioral analytics desktop applica
 ---
 
 ## Tech Stack
-To ensure a rapid 14-day development cycle and maintain 100% user data privacy, this project uses an "All-Python" multithreaded architecture.
+This project uses an "All-Python" multithreaded architecture.
 
 * **Frontend UI:** `customtkinter` (Modern, dark-mode desktop UI) & `matplotlib` (Live focus graphs)
 * **Data Collection:** `sqlite3` (Local database) & OS window trackers (`pygetwindow` for Windows / `AppKit` for macOS)

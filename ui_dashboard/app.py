@@ -1026,13 +1026,35 @@ class FocusApp(ctk.CTk):
 
     # --- 16. Subprocess Launcher & Window Closing Hook ---
     def ensure_tracker_running(self):
+        import signal
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         tracker_path = os.path.join(base_dir, "tracker_engine", "window_logger.py")
         
+        # 1. Terminate any existing orphan window_logger.py instances on the system
+        try:
+            output = subprocess.check_output(["pgrep", "-f", "window_logger.py"]).decode().strip()
+            if output:
+                pids = [int(pid) for pid in output.split()]
+                my_pid = os.getpid()
+                for pid in pids:
+                    if pid != my_pid:
+                        try:
+                            os.kill(pid, signal.SIGTERM)
+                            print(f"🎯 Terminated duplicate window_logger.py process (PID {pid})")
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+            
+        # 2. Spawn a fresh background tracker silently (redirect outputs to suppress terminal spam)
         if self.tracker_process is None or self.tracker_process.poll() is not None:
             try:
-                self.tracker_process = subprocess.Popen([sys.executable, tracker_path])
-                print("🎯 Background Tracker subprocess launched successfully.")
+                self.tracker_process = subprocess.Popen(
+                    [sys.executable, tracker_path],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                print("🎯 Silent background tracker subprocess launched successfully.")
             except Exception as e:
                 print(f"Error launching background tracker: {e}")
 

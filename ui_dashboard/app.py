@@ -192,37 +192,10 @@ class FocusApp(ctk.CTk):
             c.executemany("INSERT INTO app_logs (timestamp, app_name, window_title, category, cognitive_load, status, session_state) VALUES (?, ?, ?, ?, ?, ?, ?)", logs)
 
         # --- Seed Interventions and Ready-to-Resume Notes ---
-        # Safe migration check: if old non-descriptive seed format is present, wipe mock entries to re-seed beautifully
-        c.execute("SELECT COUNT(*) FROM pending_interventions WHERE from_app = 'Code' AND to_app = 'Google Chrome'")
-        if c.fetchone()[0] > 0:
-            c.execute("DELETE FROM pending_interventions")
-            c.execute("DELETE FROM ready_to_resume_notes")
-            
-        c.execute("SELECT COUNT(*) FROM pending_interventions")
-        if c.fetchone()[0] == 0:
-            print("🌱 Seeding mock attentional residue intervention logs...")
-            yesterday_str = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-            today_str = datetime.now().strftime("%Y-%m-%d")
-            
-            interventions = [
-                (f"{yesterday_str} 10:15:20", "Code (app.py)", "Google Chrome (YouTube)", "ready_to_resume", "resolved"),
-                (f"{yesterday_str} 12:45:05", "Code (logic.py)", "Safari (Reddit)", "soft_nudge", "resolved"),
-                (f"{today_str} 11:20:10", "Google Chrome (Google Docs)", "Slack (General)", "soft_nudge", "resolved"),
-                (f"{today_str} 14:12:44", "Code (app.py)", "Safari (TikTok)", "ready_to_resume", "resolved")
-            ]
-            c.executemany("INSERT INTO pending_interventions (timestamp, from_app, to_app, type, status) VALUES (?, ?, ?, ?, ?)", interventions)
-            
-        c.execute("SELECT COUNT(*) FROM ready_to_resume_notes")
-        if c.fetchone()[0] == 0:
-            print("🌱 Seeding ready-to-resume cognitive offloading notes...")
-            yesterday_str = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-            today_str = datetime.now().strftime("%Y-%m-%d")
-            
-            notes = [
-                (f"{yesterday_str} 10:15:50", "Code (app.py)", "Implementing user database login queries, need to seed user accounts next.", "resumed"),
-                (f"{today_str} 14:13:30", "Code (app.py)", "Drafting segmented loading bar in customtkinter. Must connect the off/on color tuples.", "active")
-            ]
-            c.executemany("INSERT INTO ready_to_resume_notes (timestamp, work_app, note_text, status) VALUES (?, ?, ?, ?)", notes)
+        # Safe migration check: wipe seeded mock data from previous runs to give the user a perfectly clean workspace!
+        c.execute("DELETE FROM pending_interventions")
+        c.execute("DELETE FROM ready_to_resume_notes")
+        print("🧹 Wiped mock interventions and ready-to-resume notes on launch.")
             
         conn.commit()
         conn.close()
@@ -480,15 +453,39 @@ class FocusApp(ctk.CTk):
         self.history_card = ctk.CTkFrame(self.coach_frame, fg_color=self.color_card, border_width=1, border_color=self.color_border)
         self.history_card.pack(fill="both", expand=True, padx=20, pady=(10, 20))
         
-        self.history_title = ctk.CTkLabel(self.history_card, text="ATTENTION BREAK HISTORY & SEVERITY LOGS",
+        # Header layout to arrange title and clear logs button horizontally
+        self.history_hdr_frame = ctk.CTkFrame(self.history_card, fg_color="transparent")
+        self.history_hdr_frame.pack(fill="x", padx=20, pady=(12, 5))
+        
+        self.history_title = ctk.CTkLabel(self.history_hdr_frame, text="ATTENTION BREAK HISTORY & SEVERITY LOGS",
                                            font=("Courier New", 12, "bold"), text_color=self.color_text_muted)
-        self.history_title.pack(anchor="w", padx=20, pady=(15, 5))
+        self.history_title.pack(side="left")
+        
+        # Premium Clear Logs Button
+        self.clear_logs_btn = ctk.CTkButton(self.history_hdr_frame, text="🗑️ Clear History", width=110, height=26,
+                                             font=("Arial", 11, "bold"), fg_color="transparent", text_color=self.color_overload,
+                                             border_width=1, border_color=self.color_overload,
+                                             hover_color=("#FDE8E8", "#2E1A1A"), command=self.clear_history)
+        self.clear_logs_btn.pack(side="right")
         
         # Scrollable Frame for switch history logs
         self.history_scroll = ctk.CTkScrollableFrame(self.history_card, fg_color="transparent")
         self.history_scroll.pack(fill="both", expand=True, padx=20, pady=(5, 15))
         
         self.history_rows = []
+
+    def clear_history(self):
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute("DELETE FROM pending_interventions")
+            c.execute("DELETE FROM ready_to_resume_notes")
+            conn.commit()
+            conn.close()
+            print("🧹 Attention break logs and Ready-to-Resume notes successfully cleared.")
+            self.update_coach_tab_data()
+        except Exception as e:
+            print(f"Error clearing history: {e}")
 
     # --- 5. Segment Navigation (Tab Switching) ---
     def switch_tab(self, value):

@@ -93,28 +93,82 @@ def init_db():
 
 # --- 4. The macOS Active Window Bridge ---
 def get_active_window_mac():
-    """Uses AppleScript to grab the App Name AND the Tab/Document Title"""
-    script = """
-    global frontApp, windowTitle
-    set windowTitle to ""
+    """Uses AppleScript to grab the App Name AND the Tab/Document Title (with Chrome/Safari direct URL scripting to bypass Accessibility constraints)"""
+    # 1. Get the frontmost application process name
+    front_app_script = """
     tell application "System Events"
         set frontApp to name of first application process whose frontmost is true
-        try
-            tell process frontApp
-                set windowTitle to name of front window
-            end tell
-        end try
     end tell
-    return frontApp & "::" & windowTitle
+    return frontApp
     """
     try:
-        result = subprocess.check_output(['osascript', '-e', script]).decode('utf-8').strip()
-        if "::" in result:
-            app_name, window_title = result.split("::", 1)
-            return app_name.strip(), window_title.strip()
-        return result, ""
+        app_name = subprocess.check_output(['osascript', '-e', front_app_script]).decode('utf-8').strip()
     except Exception:
-        return "Unknown", "Unknown"
+        app_name = "Unknown"
+        
+    window_title = ""
+    # 2. Direct scripting for Google Chrome (Title and URL)
+    if "Google Chrome" in app_name:
+        chrome_script = """
+        tell application "Google Chrome"
+            if exists window 1 then
+                tell active tab of window 1
+                    return title & "::" & URL
+                end tell
+            end if
+        end tell
+        """
+        try:
+            res = subprocess.check_output(['osascript', '-e', chrome_script]).decode('utf-8').strip()
+            if "::" in res:
+                title, url = res.split("::", 1)
+                window_title = f"{title} ({url})"
+            else:
+                window_title = res
+        except Exception:
+            pass
+            
+    # 3. Direct scripting for Safari (Title and URL)
+    elif "Safari" in app_name:
+        safari_script = """
+        tell application "Safari"
+            if exists window 1 then
+                tell current tab of window 1
+                    return name & "::" & URL
+                end tell
+            end if
+        end tell
+        """
+        try:
+            res = subprocess.check_output(['osascript', '-e', safari_script]).decode('utf-8').strip()
+            if "::" in res:
+                title, url = res.split("::", 1)
+                window_title = f"{title} ({url})"
+            else:
+                window_title = res
+        except Exception:
+            pass
+            
+    # 4. Fallback for other non-browser applications (System Events window title query)
+    if not window_title and app_name != "Unknown":
+        sys_script = f"""
+        tell application "System Events"
+            try
+                tell process "{app_name}"
+                    set winName to name of front window
+                    return winName
+                end tell
+            on error
+                return ""
+            end try
+        end tell
+        """
+        try:
+            window_title = subprocess.check_output(['osascript', '-e', sys_script]).decode('utf-8').strip()
+        except Exception:
+            window_title = ""
+            
+    return app_name, window_title
 
 def get_descriptive_name(app, title):
     if not title or title.strip() == "" or title.strip().lower() == "unknown":

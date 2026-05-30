@@ -193,6 +193,12 @@ class FocusApp(ctk.CTk):
             c.executemany("INSERT INTO app_logs (timestamp, app_name, window_title, category, cognitive_load, status, session_state) VALUES (?, ?, ?, ?, ?, ?, ?)", logs)
 
         # --- Seed Interventions and Ready-to-Resume Notes ---
+        # Safe migration check: if old non-descriptive seed format is present, wipe mock entries to re-seed beautifully
+        c.execute("SELECT COUNT(*) FROM pending_interventions WHERE from_app = 'Code' AND to_app = 'Google Chrome'")
+        if c.fetchone()[0] > 0:
+            c.execute("DELETE FROM pending_interventions")
+            c.execute("DELETE FROM ready_to_resume_notes")
+            
         c.execute("SELECT COUNT(*) FROM pending_interventions")
         if c.fetchone()[0] == 0:
             print("🌱 Seeding mock attentional residue intervention logs...")
@@ -200,10 +206,10 @@ class FocusApp(ctk.CTk):
             today_str = datetime.now().strftime("%Y-%m-%d")
             
             interventions = [
-                (f"{yesterday_str} 10:15:20", "Code", "Google Chrome", "ready_to_resume", "resolved"),
-                (f"{yesterday_str} 12:45:05", "Code", "Safari", "soft_nudge", "resolved"),
-                (f"{today_str} 11:20:10", "Code", "Slack", "soft_nudge", "resolved"),
-                (f"{today_str} 14:12:44", "Code", "Safari", "ready_to_resume", "resolved")
+                (f"{yesterday_str} 10:15:20", "Code (app.py)", "Google Chrome (YouTube)", "ready_to_resume", "resolved"),
+                (f"{yesterday_str} 12:45:05", "Code (logic.py)", "Safari (Reddit)", "soft_nudge", "resolved"),
+                (f"{today_str} 11:20:10", "Google Chrome (Google Docs)", "Slack (General)", "soft_nudge", "resolved"),
+                (f"{today_str} 14:12:44", "Code (app.py)", "Safari (TikTok)", "ready_to_resume", "resolved")
             ]
             c.executemany("INSERT INTO pending_interventions (timestamp, from_app, to_app, type, status) VALUES (?, ?, ?, ?, ?)", interventions)
             
@@ -214,8 +220,8 @@ class FocusApp(ctk.CTk):
             today_str = datetime.now().strftime("%Y-%m-%d")
             
             notes = [
-                (f"{yesterday_str} 10:15:50", "Code", "Implementing user database login queries, need to seed user accounts next.", "resumed"),
-                (f"{today_str} 14:13:30", "Code", "Drafting segmented loading bar in customtkinter. Must connect the off/on color tuples.", "active")
+                (f"{yesterday_str} 10:15:50", "Code (app.py)", "Implementing user database login queries, need to seed user accounts next.", "resumed"),
+                (f"{today_str} 14:13:30", "Code (app.py)", "Drafting segmented loading bar in customtkinter. Must connect the off/on color tuples.", "active")
             ]
             c.executemany("INSERT INTO ready_to_resume_notes (timestamp, work_app, note_text, status) VALUES (?, ?, ?, ?)", notes)
             

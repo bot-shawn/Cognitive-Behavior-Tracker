@@ -116,6 +116,15 @@ def get_active_window_mac():
     except Exception:
         return "Unknown", "Unknown"
 
+def get_descriptive_name(app, title):
+    if not title or title.strip() == "" or title.strip().lower() == "unknown":
+        return app
+    # Clean up title if it contains tabs
+    short_title = title.split(" - ")[0].split(" | ")[0].strip()
+    if len(short_title) > 30:
+        short_title = short_title[:27] + "..."
+    return f"{app} ({short_title})"
+
 # --- 5. The Dynamic Tracking & ML Engine ---
 def start_tracker():
     print("🚀 Starting Context-Aware Tracker & Attentional Residue Engine...")
@@ -152,6 +161,7 @@ def start_tracker():
     continuous_work_seconds = 0
     prev_category = "Neutral"
     prev_app_name = "None"
+    prev_window_title = "None"
     
     try:
         while True:
@@ -221,23 +231,26 @@ def start_tracker():
                     conn = sqlite3.connect(DB_PATH)
                     c = conn.cursor()
                     
-                    # 15+ minutes of continuous deep work -> High Severity -> Ready to Resume popup
-                    if continuous_work_seconds >= 900:
+                    from_desc = get_descriptive_name(prev_app_name, prev_window_title)
+                    to_desc = get_descriptive_name(app_name, window_title)
+                    
+                    # 2+ minutes of continuous deep work -> High Severity -> Ready to Resume popup (Low threshold for responsive testing!)
+                    if continuous_work_seconds >= 120:
                         c.execute("INSERT INTO pending_interventions (timestamp, from_app, to_app, type, status) VALUES (?, ?, ?, ?, ?)",
-                                  (timestamp, prev_app_name, app_name, "ready_to_resume", "pending"))
-                        print(f"🚨 [HIGH SEVERITY SWITCH] Work -> Distraction after {continuous_work_seconds//60} mins. Ready-to-Resume queued!")
+                                  (timestamp, from_desc, to_desc, "ready_to_resume", "pending"))
+                        print(f"🚨 [HIGH SEVERITY SWITCH] {from_desc} -> {to_desc} after {continuous_work_seconds}s. Ready-to-Resume queued!")
                         continuous_work_seconds = 0
                         
-                    # 3 to 15 minutes of work -> Medium Severity -> Soft Nudge inside GUI
-                    elif continuous_work_seconds >= 180:
+                    # 30 seconds to 2 minutes of work -> Medium Severity -> Soft Nudge inside GUI
+                    elif continuous_work_seconds >= 30:
                         c.execute("INSERT INTO pending_interventions (timestamp, from_app, to_app, type, status) VALUES (?, ?, ?, ?, ?)",
-                                  (timestamp, prev_app_name, app_name, "soft_nudge", "pending"))
-                        print(f"⚠️ [MEDIUM SEVERITY SWITCH] Work -> Distraction after {continuous_work_seconds//60} mins. Soft Nudge queued.")
+                                  (timestamp, from_desc, to_desc, "soft_nudge", "pending"))
+                        print(f"⚠️ [MEDIUM SEVERITY SWITCH] {from_desc} -> {to_desc} after {continuous_work_seconds}s. Soft Nudge queued.")
                         continuous_work_seconds = 0
                         
                     else:
-                        # Less than 3 minutes -> Low Severity -> Log passively
-                        print(f"ℹ️ [LOW SEVERITY SWITCH] Left work after short burst (<3 mins). Passive log only.")
+                        # Less than 30 seconds -> Low Severity -> Log passively
+                        print(f"ℹ️ [LOW SEVERITY SWITCH] Left work after short burst ({continuous_work_seconds}s). Passive log only.")
                         
                     conn.commit()
                     conn.close()
@@ -323,6 +336,7 @@ def start_tracker():
                 # Keep trace of previous state for the next tick's switch detection
                 prev_category = category
                 prev_app_name = app_name
+                prev_window_title = window_title
                 
                 print(f"[{timestamp}] {app_name} | {window_title[:30]} -> {category} | Load: {load_int}/100 ({status}) | WorkSec: {continuous_work_seconds}s")
                 last_log_time = current_time_sec

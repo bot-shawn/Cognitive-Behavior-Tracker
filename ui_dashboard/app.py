@@ -930,6 +930,7 @@ class FocusApp(ctk.CTk):
                 self.timeline_ax.set_ylim(0, 1.0)
                 self.timeline_ax.set_yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
                 self.timeline_ax.set_yticklabels(["0.0", "0.2", "0.4", "0.6", "0.8", "1.0"], color=text_muted_hex, fontname="Courier New", fontsize=9)
+                self.timeline_ax.set_xticks(hours)
                 self.timeline_ax.set_xticklabels(hours, color=text_muted_hex, fontname="Courier New", fontsize=9)
                 self.timeline_ax.grid(axis='y', linestyle='--', alpha=0.15, color=text_muted_hex, zorder=0)
             else:

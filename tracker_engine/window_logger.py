@@ -25,7 +25,7 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
-    # Create the app_logs table if it does not exist
+    # 1. Create the app_logs table if it does not exist
     c.execute('''
         CREATE TABLE IF NOT EXISTS app_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,7 +39,7 @@ def init_db():
         )
     ''')
     
-    # Create the session_state table if it does not exist
+    # 2. Create the session_state table if it does not exist
     c.execute('''
         CREATE TABLE IF NOT EXISTS session_state (
             state TEXT NOT NULL,
@@ -48,12 +48,32 @@ def init_db():
         )
     ''')
     
-    # Run migrations if columns are missing
+    # 3. Create the pending_interventions table if it does not exist
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS pending_interventions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            from_app TEXT NOT NULL,
+            to_app TEXT NOT NULL,
+            type TEXT NOT NULL,
+            status TEXT DEFAULT 'pending'
+        )
+    ''')
+    
+    # 4. Create the ready_to_resume_notes table if it does not exist
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS ready_to_resume_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            work_app TEXT NOT NULL,
+            note_text TEXT NOT NULL,
+            status TEXT DEFAULT 'active'
+        )
+    ''')
+    
+    # Run migrations if columns are missing in app_logs
     c.execute("PRAGMA table_info(app_logs)")
     columns = [col[1] for col in c.fetchall()]
-    
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
     
     if "cognitive_load" not in columns:
         c.execute("ALTER TABLE app_logs ADD COLUMN cognitive_load INTEGER DEFAULT 30")
@@ -98,7 +118,7 @@ def get_active_window_mac():
 
 # --- 5. The Dynamic Tracking & ML Engine ---
 def start_tracker():
-    print("🚀 Starting Context-Aware Tracker & ML Engine...")
+    print("🚀 Starting Context-Aware Tracker & Attentional Residue Engine...")
     init_db()
     
     # Train the Decision Tree model at startup
@@ -128,8 +148,10 @@ def start_tracker():
     app_switch_time = time.time()
     last_log_time = 0
     
-    # Track continuous deep work duration in seconds
+    # Attentional Residue Tracking metrics
     continuous_work_seconds = 0
+    prev_category = "Neutral"
+    prev_app_name = "None"
     
     try:
         while True:
@@ -153,22 +175,21 @@ def start_tracker():
             
             # 2. Check if we should log based on state
             if session_state == "Paused":
-                # Paused: Decay load very slowly, do not add normal window logs
                 if current_time_sec - last_log_time >= 5.0:
                     current_load = max(10.0, current_load - 0.5)
                     last_log_time = current_time_sec
                     continuous_work_seconds = 0
+                    prev_category = "Neutral"
                 time.sleep(1)
                 continue
                 
             elif session_state == "Break":
-                # Break Mode: Rapid load recovery!
                 if current_time_sec - last_log_time >= 5.0:
                     current_load = max(0.0, current_load - 4.0)
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     continuous_work_seconds = 0
+                    prev_category = "Neutral"
                     
-                    # Log break entry
                     conn = sqlite3.connect(DB_PATH)
                     c = conn.cursor()
                     c.execute("INSERT INTO app_logs (timestamp, app_name, window_title, category, cognitive_load, status, session_state) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -176,7 +197,6 @@ def start_tracker():
                     conn.commit()
                     conn.close()
                     
-                    print(f"[{timestamp}] [BREAK MODE] Recovering... Load: {int(current_load)} | status: steady")
                     last_log_time = current_time_sec
                 time.sleep(1)
                 continue
@@ -190,28 +210,52 @@ def start_tracker():
                 category = "Neutral"
                 if app_name in WORK_APPS:
                     category = "Work"
-                    # Check if visiting a distraction website inside a work browser
                     if any(site in window_title.lower() for site in DISTRACTION_SITES):
                         category = "Distraction"
                 elif app_name in SOCIAL_APPS:
                     category = "Distraction"
                     
-                # B. Context-Switching Tracking
+                # B. Attentional Residue Switch Interceptor
+                # Triggered when switching from Work -> Distraction
+                if prev_category == "Work" and category == "Distraction":
+                    conn = sqlite3.connect(DB_PATH)
+                    c = conn.cursor()
+                    
+                    # 15+ minutes of continuous deep work -> High Severity -> Ready to Resume popup
+                    if continuous_work_seconds >= 900:
+                        c.execute("INSERT INTO pending_interventions (timestamp, from_app, to_app, type, status) VALUES (?, ?, ?, ?, ?)",
+                                  (timestamp, prev_app_name, app_name, "ready_to_resume", "pending"))
+                        print(f"🚨 [HIGH SEVERITY SWITCH] Work -> Distraction after {continuous_work_seconds//60} mins. Ready-to-Resume queued!")
+                        continuous_work_seconds = 0
+                        
+                    # 3 to 15 minutes of work -> Medium Severity -> Soft Nudge inside GUI
+                    elif continuous_work_seconds >= 180:
+                        c.execute("INSERT INTO pending_interventions (timestamp, from_app, to_app, type, status) VALUES (?, ?, ?, ?, ?)",
+                                  (timestamp, prev_app_name, app_name, "soft_nudge", "pending"))
+                        print(f"⚠️ [MEDIUM SEVERITY SWITCH] Work -> Distraction after {continuous_work_seconds//60} mins. Soft Nudge queued.")
+                        continuous_work_seconds = 0
+                        
+                    else:
+                        # Less than 3 minutes -> Low Severity -> Log passively
+                        print(f"ℹ️ [LOW SEVERITY SWITCH] Left work after short burst (<3 mins). Passive log only.")
+                        
+                    conn.commit()
+                    conn.close()
+                    
+                # C. App switches & Context-Switching Tracking
                 if app_name != last_app:
                     app_switch_time = time.time()
                     last_app = app_name
-                    # Save history: tuple of (app_name, timestamp)
                     app_history.append((app_name, time.time()))
                     if len(app_history) > 4:
                         app_history.pop(0)
                         
                 time_spent_seconds = time.time() - app_switch_time
                 
-                # C. Heuristic Cognitive Load Modeling
+                # D. Heuristic Cognitive Load Modeling
                 if category == "Distraction":
-                    # Distraction spikes cognitive load and fragments focus
                     current_load = min(100.0, current_load + 6.0)
-                    continuous_work_seconds = 0
+                    continuous_work_seconds = max(0, continuous_work_seconds - 5) # Distractions drain deep work duration
                 elif category == "Work":
                     continuous_work_seconds += 5
                     # Under 20 mins: Keep in the focus zone (45-55)
@@ -224,22 +268,20 @@ def start_tracker():
                         # Over 20 mins: Fatigue starts accumulating
                         current_load = min(100.0, current_load + 1.2)
                 else: # Neutral
-                    # Slow decay towards neutral baseline (40)
                     if current_load > 40:
                         current_load = max(40.0, current_load - 1.0)
                     elif current_load < 40:
                         current_load = min(40.0, current_load + 1.0)
                     continuous_work_seconds = max(0, continuous_work_seconds - 5)
                     
-                # D. Context Switching Penalty
-                # If we have switched 3+ times in the last 20 seconds, apply penalty
+                # E. Context Switching Penalty
                 if len(app_history) >= 3:
                     switches_in_20s = sum(1 for _, t in app_history if time.time() - t < 20)
                     if switches_in_20s >= 3:
                         current_load = min(100.0, current_load + 5.0)
                         print("⚠️ Context switching penalty applied!")
                         
-                # E. NLP Checking & Machine Learning Overload Prediction
+                # F. NLP Checking & Machine Learning Overload Prediction
                 is_scrolling = 1 if any(site in window_title.lower() for site in DISTRACTION_SITES) else 0
                 is_deep_work = 1 if any(site in window_title.lower() for site in DEEP_WORK_SITES) else 0
                 
@@ -257,9 +299,9 @@ def start_tracker():
                         
                 # If ML predicts overload, ensure load is elevated or overload
                 if ml_prediction == 1:
-                    current_load = max(current_load, 83.0)  # Immediately push into overload range
+                    current_load = max(current_load, 83.0)
                     
-                # F. Map Score to Status
+                # G. Map Score to Status
                 load_int = int(current_load)
                 if load_int < 32:
                     status = "steady"
@@ -270,7 +312,7 @@ def start_tracker():
                 else:
                     status = "overload"
                     
-                # G. Write to Database
+                # H. Write to Database
                 conn = sqlite3.connect(DB_PATH)
                 c = conn.cursor()
                 c.execute("INSERT INTO app_logs (timestamp, app_name, window_title, category, cognitive_load, status, session_state) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -278,7 +320,11 @@ def start_tracker():
                 conn.commit()
                 conn.close()
                 
-                print(f"[{timestamp}] {app_name} | {window_title[:30]} -> {category} | Load: {load_int}/100 ({status})")
+                # Keep trace of previous state for the next tick's switch detection
+                prev_category = category
+                prev_app_name = app_name
+                
+                print(f"[{timestamp}] {app_name} | {window_title[:30]} -> {category} | Load: {load_int}/100 ({status}) | WorkSec: {continuous_work_seconds}s")
                 last_log_time = current_time_sec
                 
             time.sleep(1)

@@ -144,6 +144,9 @@ class FocusApp(ctk.CTk):
         if c.fetchone()[0] == 0:
             c.execute("INSERT INTO session_state (state, last_updated, elapsed_seconds) VALUES (?, ?, ?)",
                       ("Paused", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 0))
+        else:
+            c.execute("UPDATE session_state SET state = 'Paused', elapsed_seconds = 0")
+            
             
         # --- Seed Initial Logs if database is clean/empty ---
         c.execute("SELECT COUNT(*) FROM app_logs")
@@ -699,9 +702,6 @@ class FocusApp(ctk.CTk):
                 
                 if row:
                     load_val, status, sess_state = row
-                    if sess_state != self.current_state:
-                        self.current_state = sess_state
-                        self.highlight_active_button()
                     self.update_load_widgets(int(load_val), status)
                     
                 # 2. Check and handle interventions

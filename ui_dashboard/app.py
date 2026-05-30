@@ -66,10 +66,9 @@ class FocusApp(ctk.CTk):
         # 3. Synchronize Initial State from DB
         self.sync_session_state()
         
-        # 4. Start Background UI Poll
+        # 4. Start Background UI Poll on main thread safely
         self.poll_active = True
-        self.poll_thread = threading.Thread(target=self.background_poll, daemon=True)
-        self.poll_thread.start()
+        self.poll_db_and_update()
         
         # 5. Start Background Timer Thread
         self.timer_thread = threading.Thread(target=self.run_timer, daemon=True)
@@ -692,48 +691,47 @@ class FocusApp(ctk.CTk):
         self.update_db_state("Paused")
 
     # --- 10. Thread-Safe Live Polling & Intervention Handler ---
-    def background_poll(self):
-        while self.poll_active:
-            try:
-                # 1. Update Load Widgets from DB
-                conn = sqlite3.connect(DB_PATH)
-                c = conn.cursor()
-                c.execute("SELECT cognitive_load, status, session_state FROM app_logs ORDER BY id DESC LIMIT 1")
-                row = c.fetchone()
-                
-                # Check for pending active interventions
-                c.execute("SELECT id, from_app, to_app, type FROM pending_interventions WHERE status = 'pending' ORDER BY id ASC LIMIT 1")
-                pending = c.fetchone()
-                conn.close()
-                
-                if row:
-                    load_val, status, sess_state = row
-                    self.update_load_widgets(int(load_val), status)
-                    
-                # 2. Check and handle interventions
-                if pending and not self.popup_active:
-                    int_id, from_app, to_app, itype = pending
-                    
-                    if itype == "ready_to_resume":
-                        # Ready-to-Resume high severity pre-switch prompt
-                        self.popup_active = True
-                        # Dispatch popup thread to avoid blocking poll
-                        self.after(50, lambda: self.show_ready_to_resume_popup(int_id, from_app, to_app))
-                        
-                    elif itype == "soft_nudge":
-                        # Medium severity soft nudge desktop/in-app alert
-                        self.trigger_soft_nudge(int_id, from_app, to_app)
-                        
-            except Exception as e:
-                pass
+    def poll_db_and_update(self):
+        try:
+            # 1. Update Load Widgets from DB
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute("SELECT cognitive_load, status, session_state FROM app_logs ORDER BY id DESC LIMIT 1")
+            row = c.fetchone()
             
-            # Periodically redraw charts/insights
+            # Check for pending active interventions
+            c.execute("SELECT id, from_app, to_app, type FROM pending_interventions WHERE status = 'pending' ORDER BY id ASC LIMIT 1")
+            pending = c.fetchone()
+            conn.close()
+            
+            if row:
+                load_val, status, sess_state = row
+                self.update_load_widgets(int(load_val), status)
+                
+            # 2. Check and handle interventions
+            if pending and not self.popup_active:
+                int_id, from_app, to_app, itype = pending
+                
+                if itype == "ready_to_resume":
+                    # Ready-to-Resume high severity pre-switch prompt
+                    self.popup_active = True
+                    self.show_ready_to_resume_popup(int_id, from_app, to_app)
+                    
+                elif itype == "soft_nudge":
+                    # Medium severity soft nudge desktop/in-app alert
+                    self.trigger_soft_nudge(int_id, from_app, to_app)
+                    
+            # 3. Periodically redraw charts/insights
             if self.tab_nav.get() == "Focus Analytics":
                 self.update_charts()
             else:
                 self.update_coach_tab_data()
-                
-            time.sleep(2)
+        except Exception as e:
+            print(f"Error in UI poll: {e}")
+            
+        # Schedule next poll in 2000 ms (2 seconds) on the main thread safely
+        if self.poll_active:
+            self.after(2000, self.poll_db_and_update)
 
     # --- 11. Attentional Residue Soft Nudge Alert ---
     def trigger_soft_nudge(self, int_id, from_app, to_app):

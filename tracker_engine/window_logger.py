@@ -193,18 +193,8 @@ def start_tracker():
         print(f"⚠️ Warning: Could not train ML model ({e}). Using heuristics only.")
         model = None
         
-    # Fetch initial cognitive load from last DB record, or default to 30
+    # Initialize cognitive load to a clean, calm default start value (steady focus)
     current_load = 30
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        c.execute("SELECT cognitive_load FROM app_logs ORDER BY id DESC LIMIT 1")
-        row = c.fetchone()
-        if row:
-            current_load = int(row[0])
-        conn.close()
-    except Exception:
-        pass
         
     app_history = []  # Keep track of recent applications for context-switching detection
     last_app = None

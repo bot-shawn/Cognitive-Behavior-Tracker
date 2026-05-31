@@ -280,14 +280,22 @@ def start_tracker():
                 else:
                     app_name, window_title = get_active_window_mac()
                     
-                    # A. Raw Category Classification
-                    category = "Neutral"
-                    if app_name in WORK_APPS:
-                        category = "Work"
-                        if any(site in window_title.lower() for site in DISTRACTION_SITES):
+                    if app_name.lower() in ["python", "customtkinter", "tk"] or "cognitive tracker" in window_title.lower():
+                        # Treat self-dashboard window as Idle state to prevent feedback loops
+                        app_name = "Idle"
+                        window_title = "Away From Keyboard"
+                        category = "Idle"
+                        current_load = max(10.0, current_load - 1.0)
+                        continuous_work_seconds = 0
+                    else:
+                        # A. Raw Category Classification
+                        category = "Neutral"
+                        if app_name in WORK_APPS:
+                            category = "Work"
+                            if any(site in window_title.lower() for site in DISTRACTION_SITES):
+                                category = "Distraction"
+                        elif app_name in SOCIAL_APPS:
                             category = "Distraction"
-                    elif app_name in SOCIAL_APPS:
-                        category = "Distraction"
                     
                 # B. Attentional Residue Switch Interceptor
                 # Triggered when switching from Work -> Distraction
@@ -375,7 +383,9 @@ def start_tracker():
                         pass
                         
                 # If ML predicts overload, ensure load is elevated or overload
-                if ml_prediction == 1:
+                # We protect the active focus zone: if the user is in Work mode and has focused for less than 15 mins (900s),
+                # we prevent false positive overload spikes!
+                if ml_prediction == 1 and not (category == "Work" and continuous_work_seconds < 900):
                     current_load = max(current_load, 83.0)
                     
                 # G. Map Score to Status

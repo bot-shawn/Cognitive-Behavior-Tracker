@@ -34,7 +34,7 @@ class FocusApp(ctk.CTk):
         self.resizable(False, False) 
         
         # System State Variables
-        self.current_state = "Paused"
+        self.current_state = "Active"
         self.elapsed_seconds = 0
         self.tracker_process = None
         
@@ -150,85 +150,14 @@ class FocusApp(ctk.CTk):
         c.execute("SELECT COUNT(*) FROM session_state")
         if c.fetchone()[0] == 0:
             c.execute("INSERT INTO session_state (state, last_updated, elapsed_seconds) VALUES (?, ?, ?)",
-                      ("Paused", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 0))
+                      ("Active", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 0))
         else:
-            c.execute("UPDATE session_state SET state = 'Paused', elapsed_seconds = 0")
+            c.execute("UPDATE session_state SET state = 'Active', elapsed_seconds = 0")
             
-        # --- Seed Initial Logs if database is clean/empty ---
-        c.execute("SELECT COUNT(*) FROM app_logs")
-        if c.fetchone()[0] < 50:
-            print("🌱 Seeding focus logs for cognitive timeline...")
-            now = datetime.now()
-            logs = []
-            
-            # Yesterday Seeding
-            yesterday = now - timedelta(days=1)
-            for hr in range(9, 21):
-                hr_time = yesterday.replace(hour=hr, minute=0, second=0)
-                if hr in [9, 10, 14, 15, 19]:
-                    for m in range(0, 60, 5):
-                        t = hr_time + timedelta(minutes=m)
-                        logs.append((t.strftime("%Y-%m-%d %H:%M:%S"), "Code", "Coding ucsd/project.py", "Work", 50, "focused", "Active"))
-                elif hr in [11, 12, 16, 17]:
-                    for m in range(0, 60, 5):
-                        t = hr_time + timedelta(minutes=m)
-                        logs.append((t.strftime("%Y-%m-%d %H:%M:%S"), "Google Chrome", "Reddit", "Distraction", 78, "elevated", "Active"))
-                else:
-                    for m in range(0, 60, 5):
-                        t = hr_time + timedelta(minutes=m)
-                        logs.append((t.strftime("%Y-%m-%d %H:%M:%S"), "Slack", "Direct messages", "Neutral", 35, "steady", "Active"))
-                        
-            # Today Seeding: 6 hours ago to now (dense 1-minute activity blocks)
-            start_seeding = now - timedelta(hours=6)
-            tick = start_seeding
-            while tick < now:
-                diff_hours = (tick - start_seeding).total_seconds() / 3600
-                if diff_hours < 1.5:
-                    app = "Code"
-                    title = "Visual Studio Code (index.html)"
-                    cat = "Work"
-                    load = 55
-                    status = "focused"
-                elif diff_hours < 2.0:
-                    app = "Idle"
-                    title = "Away From Keyboard"
-                    cat = "Idle"
-                    load = 15
-                    status = "steady"
-                elif diff_hours < 3.2:
-                    app = "Google Chrome"
-                    title = "GitHub - Cognitive-Behavior-Tracker"
-                    cat = "Work"
-                    load = 62
-                    status = "focused"
-                elif diff_hours < 3.7:
-                    app = "Slack"
-                    title = "Slack (Direct Messages)"
-                    cat = "Neutral"
-                    load = 35
-                    status = "steady"
-                elif diff_hours < 4.8:
-                    app = "Safari"
-                    title = "YouTube (Lo-Fi Study Beats)"
-                    cat = "Distraction"
-                    load = 75
-                    status = "elevated"
-                else:
-                    app = "Code"
-                    title = "Visual Studio Code (app.py)"
-                    cat = "Work"
-                    load = 58
-                    status = "focused"
-                
-                logs.append((tick.strftime("%Y-%m-%d %H:%M:%S"), app, title, cat, load, status, "Active"))
-                tick += timedelta(minutes=1)
-            
-            c.executemany("INSERT INTO app_logs (timestamp, app_name, window_title, category, cognitive_load, status, session_state) VALUES (?, ?, ?, ?, ?, ?, ?)", logs)
-
-        # --- Seed Interventions and Ready-to-Resume Notes ---
+        # Ensure database starts completely fresh without any generic seeded logs
         c.execute("DELETE FROM pending_interventions")
         c.execute("DELETE FROM ready_to_resume_notes")
-        print("🧹 Wiped mock interventions and ready-to-resume notes on launch.")
+        print("🧹 Cleaned database and ready-to-resume notes on launch.")
             
         conn.commit()
         conn.close()
@@ -390,7 +319,7 @@ class FocusApp(ctk.CTk):
         self.block_work.pack(side="left", padx=10)
         self.block_neutral = ctk.CTkLabel(self.timeline_legend, text="■ Neutral", font=("Arial", 11, "bold"), text_color=self.color_text_muted)
         self.block_neutral.pack(side="left", padx=10)
-        self.block_dist = ctk.CTkLabel(self.timeline_legend, text="■ Distracted", font=("Arial", 11, "bold"), text_color=self.color_elevated)
+        self.block_dist = ctk.CTkLabel(self.timeline_legend, text="■ Distracted", font=("Arial", 11, "bold"), text_color=self.color_overload)
         self.block_dist.pack(side="left", padx=10)
         self.block_idle = ctk.CTkLabel(self.timeline_legend, text="■ Idle (AFK)", font=("Arial", 11, "bold"), text_color="#8D96A5")
         self.block_idle.pack(side="left", padx=10)
@@ -414,8 +343,8 @@ class FocusApp(ctk.CTk):
         self.top_apps_header = ctk.CTkLabel(self.top_apps_card, text="TOP APPLICATIONS (ACTIVITYWATCH STYLE)", font=("Courier New", 12, "bold"), text_color=self.color_text_muted)
         self.top_apps_header.place(x=15, y=12)
         
-        self.apps_list_frame = ctk.CTkFrame(self.top_apps_card, fg_color="transparent")
-        self.apps_list_frame.place(x=15, y=40, width=450, height=120)
+        self.apps_list_frame = ctk.CTkFrame(self.top_apps_card, fg_color="transparent", width=450, height=120)
+        self.apps_list_frame.place(x=15, y=40)
         
         # E2. Right Card: COMPARISON VS YESTERDAY
         self.compare_card = ctk.CTkFrame(self.bottom_container, fg_color=self.color_card, border_width=1, border_color=self.color_border, width=480, height=170)
@@ -892,17 +821,22 @@ class FocusApp(ctk.CTk):
 
     # --- 13. Update Cognitive Load Widget states ---
     def update_load_widgets(self, val, status):
-        self.load_val_label.configure(text=str(val))
-        self.load_status.configure(text=status.capitalize())
-        
-        level_color = self.color_steady
-        if status == "focused":
+        # Dynamically compute status from value to keep them perfectly in sync
+        if val < 32:
+            computed_status = "steady"
+            level_color = self.color_steady
+        elif val < 65:
+            computed_status = "focused"
             level_color = self.color_focused
-        elif status == "elevated":
+        elif val < 83:
+            computed_status = "elevated"
             level_color = self.color_elevated
-        elif status == "overload":
+        else:
+            computed_status = "overload"
             level_color = self.color_overload
-            
+
+        self.load_val_label.configure(text=str(val))
+        self.load_status.configure(text=computed_status.capitalize())
         self.load_val_label.configure(text_color=level_color)
         self.load_status.configure(text_color=level_color)
         
@@ -1005,6 +939,19 @@ class FocusApp(ctk.CTk):
                     'Idle': "#8D96A5"
                 }
                 
+                start_limit = df['timestamp_dt'].iloc[0] - pd.Timedelta(minutes=5)
+                end_limit = datetime.now() + pd.Timedelta(minutes=5)
+                self.timeline_ax.set_xlim(start_limit, end_limit)
+                
+                # 1. Draw a sleek background track (rail)
+                start_lim_num = mdates.date2num(start_limit)
+                end_lim_num = mdates.date2num(end_limit)
+                dur_lim_num = end_lim_num - start_lim_num
+                
+                track_color = '#262B35' if mode == 'dark' else '#E2E8F0'
+                self.timeline_ax.broken_barh([(start_lim_num, dur_lim_num)], (0.4, 0.2), facecolors=track_color, edgecolor='none', zorder=1)
+                
+                # 2. Draw colored event blocks on top of the rail
                 for event in events:
                     start_num = mdates.date2num(event['start'])
                     end_num = mdates.date2num(event['end'])
@@ -1014,17 +961,15 @@ class FocusApp(ctk.CTk):
                         dur_num = mdates.date2num(event['start'] + pd.Timedelta(seconds=5)) - start_num
                         
                     color = cat_colors.get(event['category'], "#7A8290")
-                    self.timeline_ax.broken_barh([(start_num, dur_num)], (0.1, 0.8), facecolors=color, edgecolor='none')
+                    self.timeline_ax.broken_barh([(start_num, dur_num)], (0.35, 0.3), facecolors=color, edgecolor='none', zorder=2)
                 
                 # Style ticks and labels
                 self.timeline_ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
                 self.timeline_ax.tick_params(colors=text_muted_hex, labelsize=9)
                 self.timeline_ax.set_yticks([])
                 
-                # Make limits dynamic based on start of tracking to current time
-                start_limit = df['timestamp_dt'].iloc[0] - pd.Timedelta(minutes=5)
-                end_limit = datetime.now() + pd.Timedelta(minutes=5)
-                self.timeline_ax.set_xlim(start_limit, end_limit)
+                # Draw subtle vertical gridlines behind
+                self.timeline_ax.grid(axis='x', color=text_muted_hex, linestyle=':', alpha=0.1, zorder=0)
                 
                 # Hide Spines
                 for spine in ['top', 'right', 'left', 'bottom']:

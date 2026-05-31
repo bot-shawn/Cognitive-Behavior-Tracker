@@ -30,7 +30,7 @@ class FocusApp(ctk.CTk):
         
         # --- 2. Window Setup ---
         self.title("Cognitive Tracker & Attentional Coach")
-        self.geometry("980x780") 
+        self.geometry("1020x840") 
         self.resizable(False, False) 
         
         # System State Variables
@@ -82,6 +82,14 @@ class FocusApp(ctk.CTk):
 
     # --- 3. Database Initialization & Seeding ---
     def init_db_and_seed(self):
+        # 0. Delete the database file on application startup as requested
+        if os.path.exists(DB_PATH):
+            try:
+                os.remove(DB_PATH)
+                print("🗑️ Cleaned/Deleted focus database on application startup.")
+            except Exception as e:
+                print(f"⚠️ Error deleting focus database: {e}")
+
         os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
@@ -146,7 +154,6 @@ class FocusApp(ctk.CTk):
         else:
             c.execute("UPDATE session_state SET state = 'Paused', elapsed_seconds = 0")
             
-            
         # --- Seed Initial Logs if database is clean/empty ---
         c.execute("SELECT COUNT(*) FROM app_logs")
         if c.fetchone()[0] < 50:
@@ -171,28 +178,54 @@ class FocusApp(ctk.CTk):
                         t = hr_time + timedelta(minutes=m)
                         logs.append((t.strftime("%Y-%m-%d %H:%M:%S"), "Slack", "Direct messages", "Neutral", 35, "steady", "Active"))
                         
-            # Today Seeding
-            for hr in range(8, 22):
-                hr_time = now.replace(hour=hr, minute=0, second=0)
-                if hr_time > now:
-                    continue
-                if hr in [8, 9, 10, 15, 16, 20, 21]:
-                    for m in range(0, 60, 5):
-                        t = hr_time + timedelta(minutes=m)
-                        logs.append((t.strftime("%Y-%m-%d %H:%M:%S"), "Code", "Coding dashboard", "Work", 58, "focused", "Active"))
-                elif hr in [12, 13, 17]:
-                    for m in range(0, 60, 5):
-                        t = hr_time + timedelta(minutes=m)
-                        logs.append((t.strftime("%Y-%m-%d %H:%M:%S"), "Safari", "YouTube video", "Distraction", 72, "elevated", "Active"))
+            # Today Seeding: 6 hours ago to now (dense 1-minute activity blocks)
+            start_seeding = now - timedelta(hours=6)
+            tick = start_seeding
+            while tick < now:
+                diff_hours = (tick - start_seeding).total_seconds() / 3600
+                if diff_hours < 1.5:
+                    app = "Code"
+                    title = "Visual Studio Code (index.html)"
+                    cat = "Work"
+                    load = 55
+                    status = "focused"
+                elif diff_hours < 2.0:
+                    app = "Idle"
+                    title = "Away From Keyboard"
+                    cat = "Idle"
+                    load = 15
+                    status = "steady"
+                elif diff_hours < 3.2:
+                    app = "Google Chrome"
+                    title = "GitHub - Cognitive-Behavior-Tracker"
+                    cat = "Work"
+                    load = 62
+                    status = "focused"
+                elif diff_hours < 3.7:
+                    app = "Slack"
+                    title = "Slack (Direct Messages)"
+                    cat = "Neutral"
+                    load = 35
+                    status = "steady"
+                elif diff_hours < 4.8:
+                    app = "Safari"
+                    title = "YouTube (Lo-Fi Study Beats)"
+                    cat = "Distraction"
+                    load = 75
+                    status = "elevated"
                 else:
-                    for m in range(0, 60, 5):
-                        t = hr_time + timedelta(minutes=m)
-                        logs.append((t.strftime("%Y-%m-%d %H:%M:%S"), "Slack", "UCSD server", "Neutral", 32, "steady", "Active"))
+                    app = "Code"
+                    title = "Visual Studio Code (app.py)"
+                    cat = "Work"
+                    load = 58
+                    status = "focused"
+                
+                logs.append((tick.strftime("%Y-%m-%d %H:%M:%S"), app, title, cat, load, status, "Active"))
+                tick += timedelta(minutes=1)
             
             c.executemany("INSERT INTO app_logs (timestamp, app_name, window_title, category, cognitive_load, status, session_state) VALUES (?, ?, ?, ?, ?, ?, ?)", logs)
 
         # --- Seed Interventions and Ready-to-Resume Notes ---
-        # Safe migration check: wipe seeded mock data from previous runs to give the user a perfectly clean workspace!
         c.execute("DELETE FROM pending_interventions")
         c.execute("DELETE FROM ready_to_resume_notes")
         print("🧹 Wiped mock interventions and ready-to-resume notes on launch.")
@@ -359,6 +392,8 @@ class FocusApp(ctk.CTk):
         self.block_neutral.pack(side="left", padx=10)
         self.block_dist = ctk.CTkLabel(self.timeline_legend, text="■ Distracted", font=("Arial", 11, "bold"), text_color=self.color_elevated)
         self.block_dist.pack(side="left", padx=10)
+        self.block_idle = ctk.CTkLabel(self.timeline_legend, text="■ Idle (AFK)", font=("Arial", 11, "bold"), text_color="#8D96A5")
+        self.block_idle.pack(side="left", padx=10)
         
         # Matplotlib Timeline
         self.timeline_fig, self.timeline_ax = plt.subplots(figsize=(9, 2.0), dpi=100)
@@ -366,37 +401,57 @@ class FocusApp(ctk.CTk):
         self.timeline_canvas_widget = self.timeline_canvas.get_tk_widget()
         self.timeline_canvas_widget.pack(fill="both", expand=True, padx=20, pady=(2, 10))
         
-        # E. Today vs Yesterday comparison
-        self.bottom_card = ctk.CTkFrame(self.analytics_frame, fg_color=self.color_card, border_width=1, border_color=self.color_border, height=120)
-        self.bottom_card.pack(fill="x", padx=20, pady=(5, 15))
-        self.bottom_card.pack_propagate(False)
+        # E. BOTTOM CONTAINER (Top Apps & Comparison Cards side-by-side)
+        self.bottom_container = ctk.CTkFrame(self.analytics_frame, fg_color="transparent", height=170)
+        self.bottom_container.pack(fill="x", padx=20, pady=(5, 15))
+        self.bottom_container.pack_propagate(False)
         
-        self.today_label = ctk.CTkLabel(self.bottom_card, text="Today", font=("Arial", 26, "bold"), text_color=self.color_text)
-        self.today_label.place(x=20, y=25)
-        self.vs_yesterday = ctk.CTkLabel(self.bottom_card, text="vs Yesterday", font=("Arial", 11), text_color=self.color_text_muted)
-        self.vs_yesterday.place(x=20, y=60)
+        # E1. Left Card: TOP APPLICATIONS RANKING
+        self.top_apps_card = ctk.CTkFrame(self.bottom_container, fg_color=self.color_card, border_width=1, border_color=self.color_border, width=480, height=170)
+        self.top_apps_card.pack(side="left", fill="both", expand=True, padx=(0, 10))
+        self.top_apps_card.pack_propagate(False)
         
-        # Left Sparkline (Deep Work)
-        self.spark_left_fig, self.spark_left_ax = plt.subplots(figsize=(2.0, 0.7), dpi=100)
-        self.spark_left_canvas = FigureCanvasTkAgg(self.spark_left_fig, master=self.bottom_card)
+        self.top_apps_header = ctk.CTkLabel(self.top_apps_card, text="TOP APPLICATIONS (ACTIVITYWATCH STYLE)", font=("Courier New", 12, "bold"), text_color=self.color_text_muted)
+        self.top_apps_header.place(x=15, y=12)
+        
+        self.apps_list_frame = ctk.CTkFrame(self.top_apps_card, fg_color="transparent")
+        self.apps_list_frame.place(x=15, y=40, width=450, height=120)
+        
+        # E2. Right Card: COMPARISON VS YESTERDAY
+        self.compare_card = ctk.CTkFrame(self.bottom_container, fg_color=self.color_card, border_width=1, border_color=self.color_border, width=480, height=170)
+        self.compare_card.pack(side="left", fill="both", expand=True, padx=(10, 0))
+        self.compare_card.pack_propagate(False)
+        
+        self.compare_header = ctk.CTkLabel(self.compare_card, text="TODAY VS YESTERDAY FOCUS COMPARISON", font=("Courier New", 12, "bold"), text_color=self.color_text_muted)
+        self.compare_header.place(x=15, y=12)
+        
+        # Deep Work Section
+        self.lbl_dw_header = ctk.CTkLabel(self.compare_card, text="Deep Work Time", font=("Arial", 11, "bold"), text_color=self.color_text_muted)
+        self.lbl_dw_header.place(x=15, y=35)
+        
+        self.spark_left_fig, self.spark_left_ax = plt.subplots(figsize=(1.2, 0.5), dpi=100)
+        self.spark_left_canvas = FigureCanvasTkAgg(self.spark_left_fig, master=self.compare_card)
         self.spark_left_widget = self.spark_left_canvas.get_tk_widget()
-        self.spark_left_widget.place(x=280, y=15, width=160, height=65)
+        self.spark_left_widget.place(x=15, y=55, width=120, height=50)
         
-        self.deep_work_val = ctk.CTkLabel(self.bottom_card, text="05:24 : 01", font=("Courier New", 18, "bold"), text_color=self.color_text)
-        self.deep_work_val.place(x=450, y=26)
-        self.deep_work_delta = ctk.CTkLabel(self.bottom_card, text="+1h12min", font=("Arial", 11, "bold"), text_color=self.color_focused)
-        self.deep_work_delta.place(x=450, y=56)
+        self.deep_work_val = ctk.CTkLabel(self.compare_card, text="05:24 : 01", font=("Courier New", 16, "bold"), text_color=self.color_text)
+        self.deep_work_val.place(x=145, y=55)
+        self.deep_work_delta = ctk.CTkLabel(self.compare_card, text="+1h12min", font=("Arial", 11, "bold"), text_color=self.color_focused)
+        self.deep_work_delta.place(x=145, y=80)
         
-        # Right Sparkline (Distraction)
-        self.spark_right_fig, self.spark_right_ax = plt.subplots(figsize=(2.0, 0.7), dpi=100)
-        self.spark_right_canvas = FigureCanvasTkAgg(self.spark_right_fig, master=self.bottom_card)
+        # Distraction Section
+        self.lbl_dist_header = ctk.CTkLabel(self.compare_card, text="Distractions Time", font=("Arial", 11, "bold"), text_color=self.color_text_muted)
+        self.lbl_dist_header.place(x=250, y=35)
+        
+        self.spark_right_fig, self.spark_right_ax = plt.subplots(figsize=(1.2, 0.5), dpi=100)
+        self.spark_right_canvas = FigureCanvasTkAgg(self.spark_right_fig, master=self.compare_card)
         self.spark_right_widget = self.spark_right_canvas.get_tk_widget()
-        self.spark_right_widget.place(x=590, y=15, width=160, height=65)
+        self.spark_right_widget.place(x=250, y=55, width=120, height=50)
         
-        self.dist_val = ctk.CTkLabel(self.bottom_card, text="02:31 : 19", font=("Courier New", 18, "bold"), text_color=self.color_text)
-        self.dist_val.place(x=760, y=26)
-        self.dist_delta = ctk.CTkLabel(self.bottom_card, text="-1h35min", font=("Arial", 11, "bold"), text_color=self.color_focused)
-        self.dist_delta.place(x=760, y=56)
+        self.dist_val = ctk.CTkLabel(self.compare_card, text="02:31 : 19", font=("Courier New", 16, "bold"), text_color=self.color_text)
+        self.dist_val.place(x=380, y=55)
+        self.dist_delta = ctk.CTkLabel(self.compare_card, text="-1h35min", font=("Arial", 11, "bold"), text_color=self.color_focused)
+        self.dist_delta.place(x=380, y=80)
         
         # =========================================================================
         # TAB 2: COGNITIVE THREAD COACH VIEW
@@ -889,18 +944,16 @@ class FocusApp(ctk.CTk):
         text_muted_hex = self.color_text_muted[0] if mode == "light" else self.color_text_muted[1]
         border_hex = self.color_border[0] if mode == "light" else self.color_border[1]
         
-        # A. TODAY'S TIMELINE BAR CHART
+        # A. TODAY'S TIMELINE (ActivityWatch style broken_barh chart)
         try:
             conn = sqlite3.connect(DB_PATH)
+            today_str = datetime.now().strftime('%Y-%m-%d')
             df = pd.read_sql_query("""
-                SELECT strftime('%H:00', timestamp) as hr, 
-                       avg(cognitive_load) as avg_load,
-                       category
+                SELECT timestamp, app_name, window_title, category, cognitive_load
                 FROM app_logs
-                WHERE date(timestamp) = date('now')
-                GROUP BY hr, category
-                ORDER BY hr ASC
-            """, conn)
+                WHERE date(timestamp) = ?
+                ORDER BY timestamp ASC
+            """, conn, params=(today_str,))
             conn.close()
             
             self.timeline_ax.clear()
@@ -908,58 +961,164 @@ class FocusApp(ctk.CTk):
             self.timeline_ax.set_facecolor(bg_card_hex)
             
             if not df.empty:
-                hours = df['hr'].unique()
-                avg_loads = []
-                bar_colors = []
+                df['timestamp_dt'] = pd.to_datetime(df['timestamp'])
                 
-                for h in hours:
-                    df_sub = df[df['hr'] == h]
-                    dominant_row = df_sub.loc[df_sub['avg_load'].idxmax()]
-                    avg_loads.append(dominant_row['avg_load'] / 100.0)
+                # Group contiguous sessions
+                events = []
+                current_event = None
+                
+                for _, row in df.iterrows():
+                    t = row['timestamp_dt']
+                    app = row['app_name']
+                    cat = row['category']
                     
-                    cat = dominant_row['category']
-                    if cat == "Work":
-                        bar_colors.append(self.color_focused)
-                    elif cat == "Distraction":
-                        bar_colors.append(self.color_elevated)
+                    if current_event is None:
+                        current_event = {
+                            'app_name': app,
+                            'category': cat,
+                            'start': t,
+                            'end': t
+                        }
                     else:
-                        bar_colors.append("#7A8290")
+                        time_gap = (t - current_event['end']).total_seconds()
+                        # If same app/category and gap is less than 2 minutes (120s)
+                        if time_gap < 120 and current_event['app_name'] == app and current_event['category'] == cat:
+                            current_event['end'] = t
+                        else:
+                            events.append(current_event)
+                            current_event = {
+                                'app_name': app,
+                                'category': cat,
+                                'start': t,
+                                'end': t
+                            }
+                if current_event is not None:
+                    events.append(current_event)
+                    
+                import matplotlib.dates as mdates
                 
-                self.timeline_ax.bar(hours, avg_loads, color=bar_colors, width=0.35, edgecolor='none', zorder=3)
+                # Category Colors
+                cat_colors = {
+                    'Work': self.color_focused,
+                    'Distraction': self.color_overload,
+                    'Neutral': self.color_steady,
+                    'Idle': "#8D96A5"
+                }
                 
-                self.timeline_ax.set_ylim(0, 1.0)
-                self.timeline_ax.set_yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
-                self.timeline_ax.set_yticklabels(["0.0", "0.2", "0.4", "0.6", "0.8", "1.0"], color=text_muted_hex, fontname="Courier New", fontsize=9)
-                self.timeline_ax.set_xticks(hours)
-                self.timeline_ax.set_xticklabels(hours, color=text_muted_hex, fontname="Courier New", fontsize=9)
-                self.timeline_ax.grid(axis='y', linestyle='--', alpha=0.15, color=text_muted_hex, zorder=0)
+                for event in events:
+                    start_num = mdates.date2num(event['start'])
+                    end_num = mdates.date2num(event['end'])
+                    dur_num = end_num - start_num
+                    if dur_num <= 0:
+                        # Fallback for single data point
+                        dur_num = mdates.date2num(event['start'] + pd.Timedelta(seconds=5)) - start_num
+                        
+                    color = cat_colors.get(event['category'], "#7A8290")
+                    self.timeline_ax.broken_barh([(start_num, dur_num)], (0.1, 0.8), facecolors=color, edgecolor='none')
+                
+                # Style ticks and labels
+                self.timeline_ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+                self.timeline_ax.tick_params(colors=text_muted_hex, labelsize=9)
+                self.timeline_ax.set_yticks([])
+                
+                # Make limits dynamic based on start of tracking to current time
+                start_limit = df['timestamp_dt'].iloc[0] - pd.Timedelta(minutes=5)
+                end_limit = datetime.now() + pd.Timedelta(minutes=5)
+                self.timeline_ax.set_xlim(start_limit, end_limit)
+                
+                # Hide Spines
+                for spine in ['top', 'right', 'left', 'bottom']:
+                    self.timeline_ax.spines[spine].set_visible(False)
             else:
                 self.timeline_ax.text(0.5, 0.5, "No Tracking Data Logged Today", 
                                       color=text_muted_hex, ha='center', va='center', fontname="Arial")
                 self.timeline_ax.set_xticks([])
                 self.timeline_ax.set_yticks([])
                 
-            for spine in ['top', 'right', 'left', 'bottom']:
-                self.timeline_ax.spines[spine].set_color(border_hex)
-                self.timeline_ax.spines[spine].set_alpha(0.3)
-                
             self.timeline_fig.tight_layout()
             self.timeline_canvas.draw()
         except Exception as e:
             print(f"Error drawing timeline: {e}")
             
+        # Update Top Applications ranking in Left Card dynamically
+        try:
+            for widget in self.apps_list_frame.winfo_children():
+                widget.destroy()
+            
+            conn = sqlite3.connect(DB_PATH)
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            df = pd.read_sql_query("""
+                SELECT app_name, category
+                FROM app_logs
+                WHERE date(timestamp) = ?
+            """, conn, params=(today_str,))
+            conn.close()
+
+            if not df.empty:
+                # Count logs: since they are every 5 seconds, count * 5 = duration in seconds
+                app_durations = df['app_name'].value_counts() * 5
+                total_duration = app_durations.sum()
+                
+                top_apps = app_durations.head(3)
+                
+                # App to category map
+                app_categories = df.groupby('app_name')['category'].first()
+                
+                for i, (app_name, duration) in enumerate(top_apps.items()):
+                    cat = app_categories.get(app_name, "Neutral")
+                    pct = duration / total_duration if total_duration > 0 else 0
+                    
+                    # Category-specific progress colors
+                    color = self.color_focused
+                    if cat == "Distraction":
+                        color = self.color_overload
+                    elif cat == "Neutral":
+                        color = self.color_steady
+                    elif cat == "Idle":
+                        color = "#8D96A5"
+                        
+                    # Format duration string
+                    h = duration // 3600
+                    m = (duration % 3600) // 60
+                    s = duration % 60
+                    duration_str = f"{h}h {m}m" if h > 0 else f"{m}m {s}s"
+                    
+                    row_frame = ctk.CTkFrame(self.apps_list_frame, fg_color="transparent", height=32)
+                    row_frame.pack(fill="x", pady=2)
+                    
+                    # App Name
+                    lbl_name = ctk.CTkLabel(row_frame, text=f"{i+1}. {app_name}", font=("Arial", 12, "bold"), text_color=self.color_text[0] if mode == "light" else self.color_text[1], width=130, anchor="w")
+                    lbl_name.pack(side="left", padx=5)
+                    
+                    # Progress Bar
+                    pbar = ctk.CTkProgressBar(row_frame, width=180, height=8, progress_color=color, fg_color=self.color_border[0] if mode == "light" else self.color_border[1])
+                    pbar.pack(side="left", padx=10, pady=10)
+                    pbar.set(pct)
+                    
+                    # Duration and percentage
+                    lbl_dur = ctk.CTkLabel(row_frame, text=f"{duration_str} ({int(pct*100)}%)", font=("Courier New", 11), text_color=text_muted_hex, width=90, anchor="e")
+                    lbl_dur.pack(side="left", padx=5)
+            else:
+                lbl_empty = ctk.CTkLabel(self.apps_list_frame, text="No Tracking Data Logged Today", font=("Arial", 12, "italic"), text_color=text_muted_hex)
+                lbl_empty.pack(pady=40)
+        except Exception as e:
+            print(f"Error drawing top apps: {e}")
+            
         # B. TODAY VS YESTERDAY COMPARE STATS & SPARKLINE AREA PLOTS
         try:
             conn = sqlite3.connect(DB_PATH)
             c = conn.cursor()
-            c.execute("SELECT count(*) FROM app_logs WHERE category = 'Work' AND date(timestamp) = date('now')")
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+
+            c.execute("SELECT count(*) FROM app_logs WHERE category = 'Work' AND date(timestamp) = ?", (today_str,))
             work_today = c.fetchone()[0] * 5
-            c.execute("SELECT count(*) FROM app_logs WHERE category = 'Work' AND date(timestamp) = date('now', '-1 day')")
+            c.execute("SELECT count(*) FROM app_logs WHERE category = 'Work' AND date(timestamp) = ?", (yesterday_str,))
             work_yesterday = c.fetchone()[0] * 5
             
-            c.execute("SELECT count(*) FROM app_logs WHERE category = 'Distraction' AND date(timestamp) = date('now')")
+            c.execute("SELECT count(*) FROM app_logs WHERE category = 'Distraction' AND date(timestamp) = ?", (today_str,))
             dist_today = c.fetchone()[0] * 5
-            c.execute("SELECT count(*) FROM app_logs WHERE category = 'Distraction' AND date(timestamp) = date('now', '-1 day')")
+            c.execute("SELECT count(*) FROM app_logs WHERE category = 'Distraction' AND date(timestamp) = ?", (yesterday_str,))
             dist_yesterday = c.fetchone()[0] * 5
             conn.close()
             

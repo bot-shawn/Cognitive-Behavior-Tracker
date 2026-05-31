@@ -17,7 +17,7 @@ def train_brain():
     print("📚 Training Cognitive NLP Model...")
     df = pd.read_csv(CSV_PATH)
     
-    df['category_num'] = df['category'].map({'Work': 0, 'Distraction': 1, 'Neutral': 0})
+    df['category_num'] = df['category'].map({'Work': 0, 'Distraction': 1, 'Neutral': 0, 'Idle': 0}).fillna(0)
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     df['hour'] = df['timestamp'].dt.hour
     df['time_spent_seconds'] = df['timestamp'].diff().dt.total_seconds().fillna(0)

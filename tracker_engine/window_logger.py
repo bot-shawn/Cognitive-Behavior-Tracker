@@ -91,6 +91,16 @@ def init_db():
     conn.commit()
     conn.close()
 
+def get_system_idle_seconds_mac():
+    """Uses macOS ioreg command to get the system idle time in seconds"""
+    try:
+        output = subprocess.check_output("ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {print $NF; exit}'", shell=True).decode().strip()
+        if output:
+            return int(output) / 1_000_000_000
+    except Exception:
+        pass
+    return 0.0
+
 # --- 4. The macOS Active Window Bridge ---
 def get_active_window_mac():
     """Uses AppleScript to grab the App Name AND the Tab/Document Title (with Chrome/Safari direct URL scripting to bypass Accessibility constraints)"""
@@ -257,17 +267,27 @@ def start_tracker():
                 
             # 3. Active Mode Tracking
             if current_time_sec - last_log_time >= 5.0:
-                app_name, window_title = get_active_window_mac()
+                idle_secs = get_system_idle_seconds_mac()
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 
-                # A. Raw Category Classification
-                category = "Neutral"
-                if app_name in WORK_APPS:
-                    category = "Work"
-                    if any(site in window_title.lower() for site in DISTRACTION_SITES):
+                if idle_secs >= 60:
+                    app_name = "Idle"
+                    window_title = "Away From Keyboard"
+                    category = "Idle"
+                    # Decay load during idle
+                    current_load = max(10.0, current_load - 2.0)
+                    continuous_work_seconds = 0
+                else:
+                    app_name, window_title = get_active_window_mac()
+                    
+                    # A. Raw Category Classification
+                    category = "Neutral"
+                    if app_name in WORK_APPS:
+                        category = "Work"
+                        if any(site in window_title.lower() for site in DISTRACTION_SITES):
+                            category = "Distraction"
+                    elif app_name in SOCIAL_APPS:
                         category = "Distraction"
-                elif app_name in SOCIAL_APPS:
-                    category = "Distraction"
                     
                 # B. Attentional Residue Switch Interceptor
                 # Triggered when switching from Work -> Distraction

@@ -14,8 +14,8 @@ if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
 
 # --- 2. Dictionaries & Config ---
-WORK_APPS = ["Code", "Google Chrome", "Safari", "Preview", "Pages", "Word", "Terminal", "iTerm", "Xcode"]
-SOCIAL_APPS = ["Discord", "Messages", "Mail", "Slack", "Spotify", "WhatsApp", "Zoom", "Teams"]
+WORK_APPS = ["Code", "Electron", "Cursor", "Google Chrome", "Safari", "Preview", "Pages", "Word", "Terminal", "iTerm", "Xcode", "Zoom", "zoom.us", "Teams"]
+SOCIAL_APPS = ["Discord", "Messages", "Mail", "Slack", "Spotify", "WhatsApp"]
 DISTRACTION_SITES = ["reddit", "twitter", "x", "tiktok", "instagram", "facebook", "youtube", "netflix", "shorts", "twitch"]
 DEEP_WORK_SITES = ["docs.google", "github", "stackoverflow", "canvas", "ucsd", "localhost", "deepmind", "openai"]
 

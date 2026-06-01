@@ -190,6 +190,13 @@ class FocusApp(ctk.CTk):
                                              hover_color=("#E2E8F0", "#2B303C"), command=self.toggle_theme)
         self.toggle_mode_btn.pack(side="right")
         
+        # Showcase Mode Button (Next to Dark Mode toggle)
+        self.showcase_btn = ctk.CTkButton(self.top_bar, text="✨ Load Showcase", width=130, height=30,
+                                          fg_color=self.color_card, text_color=self.color_text,
+                                          border_width=1, border_color=self.color_border,
+                                          hover_color=("#E2E8F0", "#2B303C"), command=self.toggle_showcase)
+        self.showcase_btn.pack(side="right", padx=10)
+        
         # --- 2. ELITE TAB NAVIGATION BAR ---
         self.navigation_frame = ctk.CTkFrame(self, fg_color="transparent", height=40)
         self.navigation_frame.pack(fill="x", padx=20, pady=5)
@@ -340,7 +347,7 @@ class FocusApp(ctk.CTk):
         self.top_apps_card.pack(side="left", fill="both", expand=True, padx=(0, 10))
         self.top_apps_card.pack_propagate(False)
         
-        self.top_apps_header = ctk.CTkLabel(self.top_apps_card, text="TOP APPLICATIONS (ACTIVITYWATCH STYLE)", font=("Courier New", 12, "bold"), text_color=self.color_text_muted)
+        self.top_apps_header = ctk.CTkLabel(self.top_apps_card, text="TOP APPLICATIONS BY FOCUS TIME", font=("Courier New", 12, "bold"), text_color=self.color_text_muted)
         self.top_apps_header.place(x=15, y=12)
         
         self.apps_list_frame = ctk.CTkFrame(self.top_apps_card, fg_color="transparent", width=450, height=120)
@@ -878,7 +885,7 @@ class FocusApp(ctk.CTk):
         text_muted_hex = self.color_text_muted[0] if mode == "light" else self.color_text_muted[1]
         border_hex = self.color_border[0] if mode == "light" else self.color_border[1]
         
-        # A. TODAY'S TIMELINE (ActivityWatch style broken_barh chart)
+        # A. TODAY'S TIMELINE (Premium broken_barh timeline chart)
         try:
             conn = sqlite3.connect(DB_PATH)
             today_str = datetime.now().strftime('%Y-%m-%d')
@@ -939,8 +946,15 @@ class FocusApp(ctk.CTk):
                     'Idle': "#8D96A5"
                 }
                 
-                start_limit = df['timestamp_dt'].iloc[0] - pd.Timedelta(minutes=5)
-                end_limit = datetime.now() + pd.Timedelta(minutes=5)
+                # 15-minute minimum sliding focus window ending at the current time to make live logs immediately visible
+                end_limit = datetime.now() + pd.Timedelta(seconds=30)
+                start_limit = end_limit - pd.Timedelta(minutes=15)
+                
+                # If the logs actually span more than 15 minutes, scale dynamically to show the whole session!
+                first_log_time = df['timestamp_dt'].iloc[0]
+                if (end_limit - first_log_time).total_seconds() > 900:
+                    start_limit = first_log_time - pd.Timedelta(minutes=5)
+                    
                 self.timeline_ax.set_xlim(start_limit, end_limit)
                 
                 # 1. Draw a sleek background track (rail)
@@ -1146,21 +1160,165 @@ class FocusApp(ctk.CTk):
         except Exception:
             pass
             
-        # 2. Spawn a fresh background tracker silently (redirect outputs to suppress terminal spam)
+        # 2. Spawn a fresh background tracker (redirect output to database/tracker.log for easy diagnostics)
         if self.tracker_process is None or self.tracker_process.poll() is not None:
             try:
+                log_path = os.path.join(base_dir, "database", "tracker.log")
+                self.tracker_log_file = open(log_path, "a") # append mode
                 self.tracker_process = subprocess.Popen(
                     [sys.executable, tracker_path],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
+                    stdout=self.tracker_log_file,
+                    stderr=self.tracker_log_file
                 )
                 print("🎯 Silent background tracker subprocess launched successfully.")
             except Exception as e:
                 print(f"Error launching background tracker: {e}")
 
+    def load_showcase_data(self):
+        print("🌱 Seeding rich synthetic showcase data...")
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        
+        # Clean previous data
+        c.execute("DELETE FROM app_logs")
+        c.execute("DELETE FROM pending_interventions")
+        c.execute("DELETE FROM ready_to_resume_notes")
+        
+        now = datetime.now()
+        logs = []
+        
+        # Yesterday Seeding (realistic dense intervals matching 5-second ticks!)
+        yesterday = now - timedelta(days=1)
+        for hr in range(9, 21):
+            hr_time = yesterday.replace(hour=hr, minute=0, second=0)
+            if hr in [9, 10, 14, 15, 19]:
+                # Work hours (5 hours total)
+                # Seed every 5 seconds: 12 ticks per minute, 60 minutes = 720 ticks per hour
+                for tick_idx in range(720):
+                    t = hr_time + timedelta(seconds=tick_idx * 5)
+                    logs.append((t.strftime("%Y-%m-%d %H:%M:%S"), "Code", "Coding ui_dashboard/app.py", "Work", 54, "focused", "Active"))
+            elif hr in [11, 12, 16, 17]:
+                # Distraction hours (4 hours total)
+                for tick_idx in range(720):
+                    t = hr_time + timedelta(seconds=tick_idx * 5)
+                    logs.append((t.strftime("%Y-%m-%d %H:%M:%S"), "Google Chrome", "Reddit", "Distraction", 80, "elevated", "Active"))
+            else:
+                # Neutral hours (3 hours total)
+                for tick_idx in range(720):
+                    t = hr_time + timedelta(seconds=tick_idx * 5)
+                    logs.append((t.strftime("%Y-%m-%d %H:%M:%S"), "Slack", "Direct messages", "Neutral", 32, "steady", "Active"))
+        
+        # Today Seeding: 6 hours ago to now (dense 5-second activity blocks for a flawless showcase!)
+        start_seeding = now - timedelta(hours=6)
+        tick = start_seeding
+        while tick < now:
+            diff_hours = (tick - start_seeding).total_seconds() / 3600
+            if diff_hours < 1.5:
+                app = "Code"
+                title = "Visual Studio Code (index.html)"
+                cat = "Work"
+                load = 55
+                status = "focused"
+            elif diff_hours < 2.0:
+                app = "Idle"
+                title = "Away From Keyboard"
+                cat = "Idle"
+                load = 15
+                status = "steady"
+            elif diff_hours < 3.2:
+                app = "Google Chrome"
+                title = "GitHub - Cognitive-Behavior-Tracker"
+                cat = "Work"
+                load = 62
+                status = "focused"
+            elif diff_hours < 3.7:
+                app = "Slack"
+                title = "Slack (Direct Messages)"
+                cat = "Neutral"
+                load = 35
+                status = "steady"
+            elif diff_hours < 4.8:
+                app = "Safari"
+                title = "YouTube (Lo-Fi Study Beats)"
+                cat = "Distraction"
+                load = 78
+                status = "elevated"
+            else:
+                app = "Code"
+                title = "Visual Studio Code (app.py)"
+                cat = "Work"
+                load = 58
+                status = "focused"
+            
+            logs.append((tick.strftime("%Y-%m-%d %H:%M:%S"), app, title, cat, load, status, "Active"))
+            tick += timedelta(seconds=5)
+            
+        c.executemany("INSERT INTO app_logs (timestamp, app_name, window_title, category, cognitive_load, status, session_state) VALUES (?, ?, ?, ?, ?, ?, ?)", logs)
+        
+        # Seed 10 rich mock interventions spanning the last 2 days for detailed history
+        interventions = [
+            ((now - timedelta(minutes=15)).strftime("%Y-%m-%d %H:%M:%S"), "Code (logic.py)", "Google Chrome (Twitter)", "soft_nudge", "resolved"),
+            ((now - timedelta(minutes=45)).strftime("%Y-%m-%d %H:%M:%S"), "Code (app.py)", "Safari (YouTube)", "soft_nudge", "resolved"),
+            ((now - timedelta(hours=1, minutes=20)).strftime("%Y-%m-%d %H:%M:%S"), "Terminal (run)", "Spotify (Music)", "logged_passively", "resolved"),
+            ((now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S"), "Code (index.html)", "Google Chrome (Reddit)", "ready_to_resume", "resolved"),
+            ((now - timedelta(hours=3, minutes=10)).strftime("%Y-%m-%d %H:%M:%S"), "Xcode (main.m)", "Slack (General)", "soft_nudge", "resolved"),
+            ((now - timedelta(hours=4, minutes=45)).strftime("%Y-%m-%d %H:%M:%S"), "Code (app.py)", "Figma (Design Mockup)", "logged_passively", "resolved"),
+            ((now - timedelta(hours=5, minutes=15)).strftime("%Y-%m-%d %H:%M:%S"), "Code (window_logger.py)", "Safari (Netflix)", "ready_to_resume", "resolved"),
+            ((yesterday.replace(hour=10, minute=15)).strftime("%Y-%m-%d %H:%M:%S"), "Code (model.py)", "Google Chrome (Facebook)", "soft_nudge", "resolved"),
+            ((yesterday.replace(hour=14, minute=30)).strftime("%Y-%m-%d %H:%M:%S"), "Code (app.py)", "Discord (Gaming)", "ready_to_resume", "resolved"),
+            ((yesterday.replace(hour=16, minute=45)).strftime("%Y-%m-%d %H:%M:%S"), "Xcode (compile)", "YouTube (Lo-fi study beats)", "soft_nudge", "resolved")
+        ]
+        c.executemany("INSERT INTO pending_interventions (timestamp, from_app, to_app, type, status) VALUES (?, ?, ?, ?, ?)", interventions)
+                  
+        # Seed ready-to-resume notes with varying resolution states
+        c.execute("INSERT INTO ready_to_resume_notes (timestamp, work_app, note_text, status) VALUES (?, ?, ?, ?)",
+                  ((now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S"), "Code (index.html)", "Halfway through building the horizontal broken_barh timeline, need to style the canvas background next.", "active"))
+        c.execute("INSERT INTO ready_to_resume_notes (timestamp, work_app, note_text, status) VALUES (?, ?, ?, ?)",
+                  ((now - timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S"), "Xcode (main.m)", "Styled clean button overlays in Tkinter widget hierarchy.", "resumed"))
+        c.execute("INSERT INTO ready_to_resume_notes (timestamp, work_app, note_text, status) VALUES (?, ?, ?, ?)",
+                  ((now - timedelta(hours=5)).strftime("%Y-%m-%d %H:%M:%S"), "Code (window_logger.py)", "Implemented custom HIDIdleTime fetching through Apple ioreg query.", "resumed"))
+        
+        # Synchronize elapsed session state timer (6 hours today)
+        c.execute("UPDATE session_state SET state = 'Active', elapsed_seconds = 21600")
+        
+        conn.commit()
+        conn.close()
+
+    def toggle_showcase(self):
+        if self.showcase_btn.cget("text") == "✨ Load Showcase":
+            self.load_showcase_data()
+            self.showcase_btn.configure(text="🟢 Live Mode (Reset)", fg_color="#2FA572", hover_color="#238258")
+            print("✨ Showcase synthetic data successfully loaded!")
+        else:
+            try:
+                conn = sqlite3.connect(DB_PATH)
+                c = conn.cursor()
+                c.execute("DELETE FROM app_logs")
+                c.execute("DELETE FROM pending_interventions")
+                c.execute("DELETE FROM ready_to_resume_notes")
+                c.execute("UPDATE session_state SET state = 'Active', elapsed_seconds = 0")
+                conn.commit()
+                conn.close()
+                print("🧹 Reset database to pristine empty state for Live Mode.")
+            except Exception as e:
+                print(f"Error resetting database: {e}")
+                
+            self.showcase_btn.configure(text="✨ Load Showcase", fg_color=self.color_card, hover_color=("#E2E8F0", "#2B303C"))
+            
+        # Refresh UI
+        self.sync_session_state()
+        self.update_charts()
+        self.update_coach_tab_data()
+
     def on_closing(self):
         self.poll_active = False
         
+        if hasattr(self, "tracker_log_file") and self.tracker_log_file:
+            try:
+                self.tracker_log_file.close()
+            except Exception:
+                pass
+                
         if self.tracker_process:
             try:
                 self.tracker_process.terminate()

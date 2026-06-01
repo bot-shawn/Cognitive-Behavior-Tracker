@@ -1,66 +1,131 @@
-# Cognitive-Behavior-Tracker
+# Cognitive Behavior Tracker & Attentional Coach
 
-### quick notes (delete after project complete)
-You would need a vitural environment to work on this because we have many packages that we need to use.
-to create a virtual environment (Do this only the first time)
-python3 -m venv venv   # (Mac)
-python -m venv venv    # (Windows)
+A 100% local, behavioral analytics desktop application and active study session assistant designed to diagnose context switching, prevent background attentional residue, and track mental fatigue in real-time.
 
-this is to activate it, you have to do it everytime you work on it
-source venv/bin/activate   # (Mac)
-venv\Scripts\activate      # (Windows)
-
-run pip install -r requirements.txt
-to install all the needed package to the virtual environment, only need to do once.
-
-### Mac User Troubleshooting (Tkinter Error)
-If you are using a Mac and installed Python via Homebrew, you might get a `ModuleNotFoundError: No module named '_tkinter'` error when running the UI. 
-
-This is because Homebrew does not install the Python graphics engine by default. To fix this, leave your virtual environment running and execute:
-`brew install python-tk@3.13`
-
-
-## Overview
-In an environment of constant digital distractions, individuals struggle to allocate their attention effectively. While existing tools provide descriptive weekly analytics, they fail to explain *why* attention breaks down in the moment.
-
-This project is a 100% local behavioral analytics desktop application. This platform acts as an active **Study Session Assistant** to diagnose and prevent mental fatigue in real-time.
-
-### Core Features
-* **Session-Based Tracking:** Users initiate focused study blocks (e.g., 2 hours). The app tracks attention patterns and categorizes application usage only during these active sessions.
-* **Cognitive State Detection:** Uses a local machine learning engine (trained on synthetic baseline data) to identify when a user shifts from "Deep Work" into "Cognitive Overload" (thrashing between contexts).
-* **Personalized Interventions:** Triggers native OS nudges (e.g., a 2-minute reset prompt) when high task-switching is detected to prevent burnout.
+```mermaid
+graph TD
+    %% Define components
+    A[macOS Active Window Bridge] -->|App Name / Title| B(window_logger.py Background Tracker)
+    C[macOS HID System ioreg] -->|System Idle Time| B
+    
+    B -->|Logs every 5s| D[(SQLite Database focus_data.db)]
+    
+    E[Decision Tree Classifier ML Model] -->|Scattered Score / Overload Predictions| B
+    
+    D -->|Real-time DB Polling every 2s| F(app.py GUI Dashboard)
+    
+    F -->|Start / Pause / Break Session State| D
+    F -->|Native Desktop Nudges| G[User Notification]
+    F -->|Attentional Residue Modal Popups| H[Ready-to-Resume notes saved]
+    
+    %% Style nodes
+    style B fill:#2FA572,stroke:#1E222A,stroke-width:2px,color:#fff
+    style D fill:#3A86FF,stroke:#1E222A,stroke-width:2px,color:#fff
+    style F fill:#E65F5C,stroke:#1E222A,stroke-width:2px,color:#fff
+    style E fill:#F4B942,stroke:#1E222A,stroke-width:2px,color:#fff
+```
 
 ---
 
-## Tech Stack
-This project uses an "All-Python" multithreaded architecture.
+## 🚀 Core Features & Attentional Coach Intelligence
 
-* **Frontend UI:** `customtkinter` (Modern, dark-mode desktop UI) & `matplotlib` (Live focus graphs)
-* **Data Collection:** `sqlite3` (Local database) & OS window trackers (`pygetwindow` for Windows / `AppKit` for macOS)
-* **Cognitive Engine / ML:** `pandas` & `scikit-learn` (with synthetic bootstrapping for Day-1 intelligence)
-* **Interventions:** `plyer` (Native OS desktop notifications)
+### 1. Automated Passive Tracking on Startup
+No manual configuration or start triggers required. The application starts in `"Active"` state instantly on launch. The background tracker immediately commences window tracking and system AFK idle checks.
+
+### 2. ActivityWatch-Style Event Timeline
+Replaces generic average charts with an authentic event timeline slider:
+- **Grouped contiguous sessions**: Multiple raw 5-second log rows are merged dynamically into chronological sessions of continuous activity.
+- **High-Premium Progress Rail**: Plots a centered horizontal track slider (`height=0.2`) in the background, drawing sleek colored event blocks (`height=0.3`) on top of it.
+- **Matplotlib Theming**: Uses light vertical hourly gridlines and auto-scales parameters to match local timezone formats.
+- **Color-Coded Status Tags**:
+  - 🟩 **Deep Work** (`#2FA572`)
+  - 🟥 **Distractions** (`#E65F5C`)
+  - 🟦 **Neutral Communication** (`#3A86FF`)
+  - 🟪 **Idle / AFK** (`#8D96A5`)
+
+### 3. Top Applications Ranking Panel
+A beautiful dynamic progress panel in the dashboard bottom section:
+- Dynamically aggregates tracked logs to rank the top 3 applications by total usage duration.
+- Renders proportional horizontal progress bars color-coded by their active category.
+
+### 4. Native macOS Idle (AFK) time monitoring
+- Natively queries macOS `ioreg HIDIdleTime` zsh outputs with zero external package dependencies.
+- If the system is idle for **60 seconds or more**, the tracker automatically overrides the active window log to `"Idle"` (Away From Keyboard) and category `'Idle'`.
+- Overload load values automatically decay by `2.0` points per tick when idle to represent cognitive recovery.
+
+### 5. Smart Self-App Ignore Filter
+- The dashboard app processes (`Python`, `customtkinter`, `tk`) are automatically filtered out from active window tracking inputs.
+- Viewing the dashboard acts as a resting state (`"Idle"`) and decays cognitive load, preventing false feedback loops.
+
+### 6. Attentional Overload Analysis & Active Protection
+- Integrates a local machine learning engine (Decision Tree Classifier trained on focus datasets) to predict active cognitive overloading.
+- **Active Focus Protection**: Overload predictions are bypassed if you are in a healthy, active focus block (`category == "Work"` and focused for less than 15 minutes), completely eliminating false positive overload alerts during productive focus sessions.
+
+### 7. Attentional Residue Popups
+- Tracks switches from high-severity work to distractions. If you've been working continuously for $\ge 2$ minutes and switch to leisure, the dashboard opens a top-level modal asking you to write a **Ready-to-Resume note** to help offload your background cognitive threads.
+
+### 8. Pristine Launch Database Auto-Wipe
+- To prevent database size bloat and state corruptions, the application **automatically deletes the database (`focus_data.db`) on application start**. Every run begins completely fresh, logging 100% of your real-life active data.
 
 ---
 
-## Repository Structure
-Our codebase is divided into three main workspaces running concurrently during an active session:
+## 📂 Repository Workspace Structure
+
+The project uses an "All-Python" concurrent architecture divided into clean workspace components:
 
 ```text
 Cognitive-Behavior-Tracker/
 │
 ├── tracker_engine/          # (Data Engineer's workspace)
-│   └── window_logger.py     # Captures active window & writes to SQLite
+│   └── window_logger.py     # Captures active front window, macOS idle time, and writes logs to SQLite
 │
 ├── ml_model/                # (Cognitive Modeler's workspace)
-│   ├── synthetic_data.py    # Generates 30 days of fake data to train the ML
-│   └── logic.py             # Reads SQLite, calculates Scattered Score
+│   ├── synthetic_data.py    # Generates focus logs to test the ML models
+│   ├── logic.py             # Trains the decision tree model and runs live brain analysis
+│   └── synthetic_focus_data.csv # Synthetic focus training dataset
 │
-├── ui_dashboard/            # (HCI/Frontend Dev's workspace)
-│   └── app.py               # Renders Tkinter UI, Start/Stop controls, triggers nudges
+├── ui_dashboard/            # (HCI & Frontend Dev's workspace)
+│   └── app.py               # Renders customtkinter UI, Matplotlib timelines, dynamic Top Apps lists, and comparison sparklines
 │
 ├── database/                # (Storage)
-│   └── schema.sql           # SQLite table structures
+│   └── focus_data.db        # Live SQLite focus database (Created at startup)
 │
-├── README.md                
-├── .gitignore               # Ignores local databases and virtual environments
-└── requirements.txt         # Project dependencies
+├── requirements.txt         # Project package dependencies
+├── .gitignore               # Excludes SQLite databases and local virtual environments
+└── README.md                # Project documentation (You are here)
+```
+
+---
+
+## 🛠️ Installation & Getting Started
+
+### 1. Set Up a Virtual Environment (First time only)
+Run this command from your terminal inside the root directory to create your virtual environment:
+```bash
+python3 -m venv venv
+```
+
+### 2. Activate the Virtual Environment
+Activate the environment (Run this command in any new terminal tab before working on the project):
+```bash
+source venv/bin/activate
+```
+
+### 3. Install Dependencies
+Install all required UI and analytical python packages into your environment:
+```bash
+pip install -r requirements.txt
+```
+
+### 4. macOS Tkinter Trouble-shooting
+If you get a `ModuleNotFoundError: No module named '_tkinter'` error, it means python was installed without Tkinter. Keep your virtual environment active and run:
+```bash
+brew install python-tk@3.13
+```
+
+### 5. Running the Application
+Launch the dashboard directly:
+```bash
+python3 ui_dashboard/app.py
+```
+*(The silent background logger subprocess is automatically spawned and terminated cleanly by the main GUI thread!)*

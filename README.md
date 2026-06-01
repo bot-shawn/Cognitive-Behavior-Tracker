@@ -27,16 +27,16 @@ graph TD
 
 ---
 
-## 🚀 Core Features & Attentional Coach Intelligence
+## Core Features & Attentional Coach Intelligence
 
 ### 1. Automated Passive Tracking on Startup
 No manual configuration or start triggers required. The application starts in `"Active"` state instantly on launch. The background tracker immediately commences window tracking and system AFK idle checks.
 
-### 2. ActivityWatch-Style Event Timeline
+### 2. Clear Event Timeline
 Replaces generic average charts with an authentic event timeline slider:
 - **Grouped sessions**: Multiple raw 5-second log rows are merged into chronological sessions of continuous activity.
-- **High-Premium Progress Rail**: Plots a centered horizontal track slider (`height=0.2`) in the background, drawing colored event blocks (`height=0.3`) on top of it.
-- **Matplotlib Theming**: Uses light vertical hourly gridlines and auto-scales parameters to match local timezone formats.
+- **Smooth Progress bar**: Plots a centered horizontal track slider (`height=0.2`) in the background, drawing colored event blocks (`height=0.3`) on top of it.
+- **Matplotlib implementation**: Uses light vertical hourly gridlines and auto-scales parameters to match local timezone formats.
 - **Color-Coded Status Tags**:
   - 🟩 **Deep Work** (`#2FA572`)
   - 🟥 **Distractions** (`#E65F5C`)
@@ -64,12 +64,12 @@ A beautiful dynamic progress panel in the dashboard bottom section:
 ### 7. Attentional Residue Popups
 - Tracks switches from high-severity work to distractions. If you've been working continuously for $\ge 2$ minutes and switch to leisure, the dashboard opens a top-level modal asking you to write a **Ready-to-Resume note** to help offload your background cognitive threads.
 
-### 8. Launch Database Auto-Wipe
+### 8. Database clearing each startup
 - To prevent database size bloat and state corruptions, the application **automatically deletes the database (`focus_data.db`) on application start**. Every run begins completely fresh, logging 100% of your real-life active data.
 
 ---
 
-## 📂 Repository Workspace Structure
+## Repository Workspace Structure
 
 The project uses an "All-Python" concurrent architecture divided into clean workspace components:
 

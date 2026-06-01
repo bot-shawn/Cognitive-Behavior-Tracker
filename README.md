@@ -53,7 +53,7 @@ A progress panel in the dashboard bottom section:
 - If the system is idle for **60 seconds or more**, the tracker automatically overrides the active window log to `"Idle"` (Away From Keyboard) and category `'Idle'`.
 - Overload load values automatically decay by `2.0` points per tick when idle to represent cognitive recovery.
 
-### 5. Smart Self-App Ignore Filter
+### 5. Idle tracking feature
 - The dashboard app processes (`Python`, `customtkinter`, `tk`) are automatically filtered out from active window tracking inputs.
 - Viewing the dashboard acts as a resting state (`"Idle"`) and decays cognitive load, preventing false feedback loops.
 
@@ -97,7 +97,7 @@ Cognitive-Behavior-Tracker/
 
 ---
 
-## 🛠️ Installation & Getting Started
+## Installation & Getting Started
 
 ### 1. Set Up a Virtual Environment (First time only)
 Run this command from your terminal inside the root directory to create your virtual environment:

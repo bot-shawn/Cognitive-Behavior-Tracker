@@ -44,8 +44,8 @@ Replaces generic average charts with an authentic event timeline slider:
   - 🟪 **Idle / AFK** (`#8D96A5`)
 
 ### 3. Top Applications Ranking Panel
-A beautiful dynamic progress panel in the dashboard bottom section:
-- Dynamically aggregates tracked logs to rank the top 3 applications by total usage duration.
+A progress panel in the dashboard bottom section:
+- Tracks logs to rank the top 3 applications by total usage duration.
 - Renders proportional horizontal progress bars color-coded by their active category.
 
 ### 4. Native macOS Idle (AFK) time monitoring

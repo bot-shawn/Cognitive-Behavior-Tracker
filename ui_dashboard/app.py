@@ -44,8 +44,8 @@ class FocusApp(ctk.CTk):
         # Color Tokens (Light Mode, Dark Mode)
         self.color_bg = ("#F4F6F8", "#15181F")
         self.color_card = ("#FFFFFF", "#1C2029")
-        self.color_text = ("#1E222A", "#FFFFFF")
-        self.color_text_muted = ("#7A8290", "#8D96A5")
+        self.color_text = ("#0B0F19", "#FFFFFF")
+        self.color_text_muted = ("#475569", "#94A3B8")
         self.color_border = ("#E2E8F0", "#2B303C")
         
         # Segment & Status Colors
@@ -205,6 +205,7 @@ class FocusApp(ctk.CTk):
                                               values=["Focus Analytics", "Cognitive Thread Coach"], 
                                               font=("Arial", 14, "bold"), height=35,
                                               selected_color="#2FA572",
+                                              text_color=self.color_text,
                                               command=self.switch_tab)
         self.tab_nav.pack(fill="x")
         self.tab_nav.set("Focus Analytics")
@@ -311,9 +312,8 @@ class FocusApp(ctk.CTk):
         self.bullet_overload = ctk.CTkLabel(self.legend_frame, text="● overload", font=("Arial", 10), text_color=self.color_overload)
         self.bullet_overload.pack(side="left", padx=10)
         
-        # D. TODAY'S TIMELINE Card
+        # D. TODAY'S TIMELINE Card (creation only, packed later below)
         self.timeline_card = ctk.CTkFrame(self.analytics_frame, fg_color=self.color_card, border_width=1, border_color=self.color_border)
-        self.timeline_card.pack(fill="both", expand=True, padx=20, pady=10)
         
         self.timeline_header = ctk.CTkFrame(self.timeline_card, fg_color="transparent")
         self.timeline_header.pack(fill="x", padx=20, pady=(10, 2))
@@ -341,6 +341,9 @@ class FocusApp(ctk.CTk):
         self.bottom_container = ctk.CTkFrame(self.analytics_frame, fg_color="transparent", height=170)
         self.bottom_container.pack(side="bottom", fill="x", padx=20, pady=(5, 15))
         self.bottom_container.pack_propagate(False)
+        
+        # Pack timeline_card now so that it fills the remaining space between the top row and bottom container
+        self.timeline_card.pack(fill="both", expand=True, padx=20, pady=10)
         
         # E1. Left Card: TOP APPLICATIONS RANKING
         self.top_apps_card = ctk.CTkFrame(self.bottom_container, fg_color=self.color_card, border_width=1, border_color=self.color_border, width=480, height=170)
@@ -433,10 +436,10 @@ class FocusApp(ctk.CTk):
         self.insights_bg = ctk.CTkFrame(self.insights_card, fg_color="transparent")
         self.insights_bg.pack(fill="both", expand=True, padx=20, pady=(5, 15))
         
-        self.insight_score_lbl = ctk.CTkLabel(self.insights_bg, text="Attention Score: 78/100  (Good)", font=("Arial", 14, "bold"), text_color=self.color_focused)
+        self.insight_score_lbl = ctk.CTkLabel(self.insights_bg, text="Attention Score: --/100", font=("Arial", 14, "bold"), text_color=self.color_text_muted)
         self.insight_score_lbl.pack(anchor="w", pady=2)
         
-        self.insight_desc_lbl = ctk.CTkLabel(self.insights_bg, text="You successfully offloaded 2 cognitive threads today using Ready-to-Resume notes. This saved an estimated 40 minutes of background attentional leakage.\n\nAdvice: Your cognitive load peaks around 4:00 PM. Context switching spikes here. We recommend taking a proactive 15-minute break at 3:45 PM to recover focus.",
+        self.insight_desc_lbl = ctk.CTkLabel(self.insights_bg, text="No focus pattern insights logged today yet. As you actively work, the AI Coach will analyze your context switches and provide personalized attentional offload advice here.",
                                              font=("Arial", 13), text_color=self.color_text, wraplength=400, justify="left")
         self.insight_desc_lbl.pack(anchor="w", pady=(5, 5), fill="both", expand=True)
         
@@ -577,6 +580,23 @@ class FocusApp(ctk.CTk):
                 empty_lbl.pack(pady=30)
         except Exception as e:
             print(f"Error loading coach history: {e}")
+            
+        # 3. Update AI Insights dynamically (Live Mode shows empty state, Showcase Mode shows rich logs)
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute("SELECT COUNT(*) FROM app_logs")
+            log_count = c.fetchone()[0]
+            conn.close()
+            
+            if log_count > 10:
+                self.insight_score_lbl.configure(text="Attention Score: 78/100  (Good)", text_color=self.color_focused)
+                self.insight_desc_lbl.configure(text="You successfully offloaded 2 cognitive threads today using Ready-to-Resume notes. This saved an estimated 40 minutes of background attentional leakage.\n\nAdvice: Your cognitive load peaks around 4:00 PM. Context switching spikes here. We recommend taking a proactive 15-minute break at 3:45 PM to recover focus.")
+            else:
+                self.insight_score_lbl.configure(text="Attention Score: --/100", text_color=self.color_text_muted)
+                self.insight_desc_lbl.configure(text="No focus pattern insights logged today yet. As you actively work, the AI Coach will analyze your context switches and provide personalized attentional offload advice here.")
+        except Exception as e:
+            print(f"Error loading coach insights: {e}")
 
     # --- 7. Theme / Appearance Swapper ---
     def toggle_theme(self):
@@ -658,9 +678,9 @@ class FocusApp(ctk.CTk):
         btn_inactive_fg = "transparent"
         border_col = self.color_border[0] if mode == "light" else self.color_border[1]
         
-        self.btn_start.configure(fg_color=btn_inactive_fg, border_color=border_col, text_color=self.color_text[0] if mode == "light" else self.color_text[1])
-        self.btn_break.configure(fg_color=btn_inactive_fg, border_color=border_col, text_color=self.color_text[0] if mode == "light" else self.color_text[1])
-        self.btn_pause.configure(fg_color=btn_inactive_fg, border_color=border_col, text_color=self.color_text[0] if mode == "light" else self.color_text[1])
+        self.btn_start.configure(fg_color=btn_inactive_fg, border_color=border_col, text_color=self.color_text)
+        self.btn_break.configure(fg_color=btn_inactive_fg, border_color=border_col, text_color=self.color_text)
+        self.btn_pause.configure(fg_color=btn_inactive_fg, border_color=border_col, text_color=self.color_text)
         
         if self.current_state == "Active":
             self.btn_start.configure(fg_color=btn_active_fg, border_color=btn_active_fg, text_color="white")
@@ -1081,13 +1101,13 @@ class FocusApp(ctk.CTk):
             dist_yesterday = c.fetchone()[0] * 5
             conn.close()
             
-            # Safe Fallback to mockup data if real DB lacks logs
+            # Safe Fallback to 0 if real DB lacks logs (pristine Live Mode starts at 0!)
             if work_today < 60:
-                work_today = 19441   # 5h 24m 01s
-                work_yesterday = 15120 # 4h 12m 00s
+                work_today = 0
+                work_yesterday = 0
             if dist_today < 60:
-                dist_today = 9079     # 2h 31m 19s
-                dist_yesterday = 14700 # 4h 05m 00s
+                dist_today = 0
+                dist_yesterday = 0
                 
             self.deep_work_val.configure(text=self.format_seconds(work_today))
             self.dist_val.configure(text=self.format_seconds(dist_today))
@@ -1104,9 +1124,11 @@ class FocusApp(ctk.CTk):
             else:
                 self.dist_delta.configure(text=f"+{self.format_diff(dist_diff)}", text_color=self.color_overload)
                 
-            # Sparkline curves
-            self.draw_sparkline(self.spark_left_ax, self.spark_left_canvas, bg_card_hex, self.color_focused, [0.3, 0.45, 0.35, 0.55, 0.68, 0.52, 0.75, 0.65])
-            self.draw_sparkline(self.spark_right_ax, self.spark_right_canvas, bg_card_hex, self.color_elevated, [0.65, 0.72, 0.5, 0.4, 0.35, 0.25, 0.45, 0.1])
+            # Sparkline curves: draw flat line at 0 for live empty state, and rich curves when data exists
+            left_points = [0.0] * 8 if work_today == 0 else [0.3, 0.45, 0.35, 0.55, 0.68, 0.52, 0.75, 0.65]
+            right_points = [0.0] * 8 if dist_today == 0 else [0.65, 0.72, 0.5, 0.4, 0.35, 0.25, 0.45, 0.1]
+            self.draw_sparkline(self.spark_left_ax, self.spark_left_canvas, bg_card_hex, self.color_focused, left_points)
+            self.draw_sparkline(self.spark_right_ax, self.spark_right_canvas, bg_card_hex, self.color_elevated, right_points)
         except Exception as e:
             print(f"Error drawing sparklines: {e}")
 

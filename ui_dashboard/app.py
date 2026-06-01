@@ -339,7 +339,7 @@ class FocusApp(ctk.CTk):
         
         # E. BOTTOM CONTAINER (Top Apps & Comparison Cards side-by-side)
         self.bottom_container = ctk.CTkFrame(self.analytics_frame, fg_color="transparent", height=170)
-        self.bottom_container.pack(fill="x", padx=20, pady=(5, 15))
+        self.bottom_container.pack(side="bottom", fill="x", padx=20, pady=(5, 15))
         self.bottom_container.pack_propagate(False)
         
         # E1. Left Card: TOP APPLICATIONS RANKING

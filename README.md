@@ -32,7 +32,7 @@ graph TD
 ### 1. Automated Passive Tracking on Startup
 No manual configuration or start triggers required. The application starts in `"Active"` state instantly on launch. The background tracker immediately commences window tracking and system AFK idle checks.
 
-### 2. Premium Horizontal Event Timeline
+### 2. Simple Horizontal Event Timeline
 Replaces generic average charts with an authentic event timeline slider:
 - **Grouped contiguous sessions**: Multiple raw 5-second log rows are merged dynamically into chronological sessions of continuous activity.
 - **High-Premium Progress Rail**: Plots a centered horizontal track slider (`height=0.2`) in the background, drawing sleek colored event blocks (`height=0.3`) on top of it.
